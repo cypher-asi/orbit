@@ -43,6 +43,7 @@ pub fn repo_path(config: &StorageConfig, repo_id: Uuid) -> PathBuf {
 /// 3. Sets HEAD to `refs/heads/{default_branch}` via `git symbolic-ref`.
 ///
 /// If the repository directory already exists, this is a no-op (idempotent).
+#[allow(dead_code)]
 pub async fn init_bare_repo(
     config: &StorageConfig,
     repo_id: Uuid,

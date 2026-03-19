@@ -6,7 +6,6 @@ use crate::config::Config;
 
 /// Shared application state passed to request handlers via axum's `State` extractor.
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct AppState {
     /// PostgreSQL connection pool.
     pub db: PgPool,

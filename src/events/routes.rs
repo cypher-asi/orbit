@@ -76,7 +76,7 @@ async fn admin_list_events(
         event_type: params.event_type,
         since: params.since,
         until: params.until,
-        limit: params.limit.unwrap_or(50).min(200).max(1),
+        limit: params.limit.unwrap_or(50).clamp(1, 200),
         offset: params.offset.unwrap_or(0),
     };
 
@@ -128,7 +128,7 @@ async fn repo_events(
         event_type: params.event_type,
         since: params.since,
         until: params.until,
-        limit: params.limit.unwrap_or(50).min(200).max(1),
+        limit: params.limit.unwrap_or(50).clamp(1, 200),
         offset: params.offset.unwrap_or(0),
     };
 
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn limit_clamping_logic() {
         // Verify the clamping expression produces expected values.
-        let clamp = |limit: Option<u32>| limit.unwrap_or(50).min(200).max(1);
+        let clamp = |limit: Option<u32>| limit.unwrap_or(50).clamp(1, 200);
         assert_eq!(clamp(None), 50);
         assert_eq!(clamp(Some(500)), 200);
         assert_eq!(clamp(Some(0)), 1);

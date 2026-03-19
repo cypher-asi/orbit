@@ -48,7 +48,7 @@ impl GitCommand {
         }
     }
 
-    /// Override the default timeout for Git operations.
+    /// Override the default timeout for Git operations. Used in tests.
     #[allow(dead_code)]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
@@ -101,7 +101,7 @@ impl GitCommand {
         }
     }
 
-    /// Return a reference to the repository path this command targets.
+    /// Return a reference to the repository path this command targets. Used in tests.
     #[allow(dead_code)]
     pub fn repo_path(&self) -> &PathBuf {
         &self.repo_path

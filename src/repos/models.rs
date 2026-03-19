@@ -10,10 +10,11 @@ use uuid::Uuid;
 ///
 /// Stored in the `repos.visibility` column as a lowercase string
 /// (`"public"` or `"private"`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     Public,
+    #[default]
     Private,
 }
 
@@ -33,12 +34,6 @@ impl Visibility {
             "private" => Some(Visibility::Private),
             _ => None,
         }
-    }
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Private
     }
 }
 

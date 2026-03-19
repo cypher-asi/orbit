@@ -21,7 +21,7 @@ use crate::users::service as user_service;
 /// was missing.
 pub async fn resolve_git_repo(
     pool: &PgPool,
-    storage_root: &PathBuf,
+    storage_root: &std::path::Path,
     owner_slug: &str,
     repo_slug: &str,
 ) -> Result<(Repo, PathBuf), ApiError> {

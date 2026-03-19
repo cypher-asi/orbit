@@ -9,7 +9,6 @@ use serde_json::json;
 /// {"error": {"code": "...", "message": "...", "details": ...}}
 /// ```
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ApiError {
     /// 400 Bad Request
     BadRequest(String),
@@ -23,7 +22,8 @@ pub enum ApiError {
     Conflict(String),
     /// 422 Unprocessable Entity
     Unprocessable(String),
-    /// 429 Too Many Requests
+    /// 429 Too Many Requests (reserved; rate-limit layer returns its own response body).
+    #[allow(dead_code)]
     RateLimited(String),
     /// 500 Internal Server Error
     Internal(String),

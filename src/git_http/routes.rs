@@ -75,7 +75,7 @@ pub async fn info_refs(
 
     // Resolve the repository from the URL path.
     let (repo, disk_path) =
-        resolve_git_repo(&state.db, &state.git_storage_root, &path.owner, &path.repo).await?;
+        resolve_git_repo(&state.db, state.git_storage_root.as_path(), &path.owner, &path.repo).await?;
 
     // Authorization checks based on the service type.
     let viewer_id = user.as_ref().map(|u| u.id);
@@ -196,7 +196,7 @@ pub async fn upload_pack(
 ) -> Result<Response, ApiError> {
     // Resolve the repository from the URL path.
     let (repo, disk_path) =
-        resolve_git_repo(&state.db, &state.git_storage_root, &path.owner, &path.repo).await?;
+        resolve_git_repo(&state.db, state.git_storage_root.as_path(), &path.owner, &path.repo).await?;
 
     // Authorization: public repos allow anonymous read; private repos
     // require auth + read permission.
@@ -308,7 +308,7 @@ pub async fn receive_pack(
 ) -> Result<Response, ApiError> {
     // Resolve the repository from the URL path.
     let (repo, disk_path) =
-        resolve_git_repo(&state.db, &state.git_storage_root, &path.owner, &path.repo).await?;
+        resolve_git_repo(&state.db, state.git_storage_root.as_path(), &path.owner, &path.repo).await?;
 
     // Authorization: always requires auth + write permission.
     let viewer_id = user.as_ref().map(|u| u.id);
