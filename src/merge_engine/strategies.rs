@@ -938,6 +938,16 @@ mod tests {
         let (_tmp, bare) = init_test_repo().await;
         let git = GitCommand::new(bare.clone());
 
+        // Configure committer identity for commit-tree (required in CI)
+        for args in [
+            vec!["config", "user.email", "test@test.com"],
+            vec!["config", "user.name", "Test User"],
+        ] {
+            git.run(&args.iter().map(|s| s.as_ref()).collect::<Vec<&str>>())
+                .await
+                .unwrap();
+        }
+
         let old_sha = get_ref_sha(&bare, "main").await;
 
         // Create a new commit object to point the ref at.
