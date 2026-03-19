@@ -267,36 +267,6 @@ async fn retry_job(
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the Router for all admin endpoints.
-///
-/// Mounts:
-/// - `GET    /admin/users`              -- list users (pagination + search)
-/// - `GET    /admin/users/{id}`         -- get user details
-/// - `POST   /admin/users/{id}/disable` -- disable user
-/// - `POST   /admin/users/{id}/enable`  -- enable user
-/// - `GET    /admin/repos`              -- list repos (pagination + search)
-/// - `GET    /admin/repos/{id}`         -- get repo details + storage status
-/// - `POST   /admin/repos/{id}/archive` -- archive repo
-/// - `GET    /admin/jobs`               -- list jobs (status filter)
-/// - `GET    /admin/jobs/failed`        -- list failed jobs
-/// - `POST   /admin/jobs/{id}/retry`    -- retry failed job
-pub fn admin_routes() -> Router<AppState> {
-    Router::new()
-        // User management
-        .route("/admin/users", get(list_users))
-        .route("/admin/users/{id}", get(get_user))
-        .route("/admin/users/{id}/disable", post(disable_user))
-        .route("/admin/users/{id}/enable", post(enable_user))
-        // Repo management
-        .route("/admin/repos", get(list_repos))
-        .route("/admin/repos/{id}", get(get_repo))
-        .route("/admin/repos/{id}/archive", post(archive_repo))
-        // Job management
-        .route("/admin/jobs", get(list_jobs))
-        .route("/admin/jobs/failed", get(list_failed_jobs))
-        .route("/admin/jobs/{id}/retry", post(retry_job))
-}
-
 /// Build a Router for admin mutation endpoints only.
 ///
 /// These are state-changing operations that should be rate-limited for

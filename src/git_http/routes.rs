@@ -452,22 +452,6 @@ pub async fn receive_pack(
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the Router for Git HTTP transport endpoints.
-///
-/// Mounts:
-/// - `GET  /{owner}/{repo}/info/refs`      -- ref advertisement
-/// - `POST /{owner}/{repo}/git-upload-pack`  -- clone/fetch pack exchange
-/// - `POST /{owner}/{repo}/git-receive-pack` -- push pack receive
-///
-/// Note: the `.git` suffix is part of the `{repo}` path parameter, so
-/// callers access `/{owner}/{repo}.git/info/refs`, etc.
-pub fn git_http_routes() -> Router<AppState> {
-    Router::new()
-        .route("/{owner}/{repo}/info/refs", get(info_refs))
-        .route("/{owner}/{repo}/git-upload-pack", post(upload_pack))
-        .route("/{owner}/{repo}/git-receive-pack", post(receive_pack))
-}
-
 /// Build a Router for Git read-only endpoints (info/refs and upload-pack).
 ///
 /// These are used for clone/fetch operations and do not need aggressive

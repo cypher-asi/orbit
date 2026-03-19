@@ -148,17 +148,6 @@ async fn merge_pr(
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the Router for merge engine endpoints.
-///
-/// Mounts:
-/// - `POST /repos/{owner}/{repo}/pulls/{id}/merge` -- merge a PR (id = UUID)
-pub fn merge_engine_routes() -> Router<AppState> {
-    Router::new().route(
-        "/repos/{owner}/{repo}/pulls/{id}/merge",
-        post(merge_pr),
-    )
-}
-
 /// Return a method router for the merge-PR handler.
 ///
 /// This allows the central router to mount the merge endpoint separately

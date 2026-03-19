@@ -201,25 +201,6 @@ pub fn create_token_handler_fn() -> axum::routing::MethodRouter<AppState> {
     post(create_token_handler)
 }
 
-/// Build the `Router` for all authentication endpoints (convenience).
-///
-/// Mounts:
-/// - `POST   /auth/login`
-/// - `POST   /auth/tokens`
-/// - `GET    /auth/tokens`
-/// - `DELETE /auth/tokens/{id}`
-///
-/// Note: The central router typically uses the individual route builders
-/// (`auth_login_routes`, `auth_token_read_routes`, `create_token_handler_fn`)
-/// to apply different rate limits. This combined router is provided for
-/// convenience in contexts where unified mounting is preferred.
-pub fn auth_routes() -> Router<AppState> {
-    Router::new()
-        .route("/auth/login", post(login_handler))
-        .route("/auth/tokens", post(create_token_handler).get(list_tokens_handler))
-        .route("/auth/tokens/{id}", delete(revoke_token_handler))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

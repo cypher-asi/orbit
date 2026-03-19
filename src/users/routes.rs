@@ -222,18 +222,6 @@ pub async fn update_me(
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the Router for user-related endpoints.
-///
-/// Mounts:
-/// - `POST /auth/register`
-/// - `GET  /users/me`
-/// - `PATCH /users/me`
-pub fn users_routes() -> Router<AppState> {
-    Router::new()
-        .route("/auth/register", post(register))
-        .route("/users/me", get(get_me).patch(update_me))
-}
-
 /// Build a Router containing only user profile routes.
 ///
 /// Mounts:

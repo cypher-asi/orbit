@@ -422,52 +422,6 @@ pub struct MergeabilityResponse {
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the Router for pull request endpoints.
-///
-/// Mounts:
-/// - `POST   /repos/{owner}/{repo}/pulls`                  -- create PR
-/// - `GET    /repos/{owner}/{repo}/pulls`                  -- list PRs
-/// - `GET    /repos/{owner}/{repo}/pulls/{id}`             -- get PR details (id = UUID)
-/// - `PATCH  /repos/{owner}/{repo}/pulls/{id}`              -- update PR
-/// - `POST   /repos/{owner}/{repo}/pulls/{id}/close`       -- close PR
-/// - `POST   /repos/{owner}/{repo}/pulls/{id}/reopen`      -- reopen PR
-/// - `GET    /repos/{owner}/{repo}/pulls/{id}/diff`        -- get PR diff
-/// - `GET    /repos/{owner}/{repo}/pulls/{id}/mergeability` -- check mergeability
-/// - `GET    /repos/{owner}/{repo}/pulls/{id}/conflicts`   -- check merge conflicts
-/// - `POST   /repos/{owner}/{repo}/pulls/{id}/merge`       -- merge PR
-pub fn pull_request_routes() -> Router<AppState> {
-    Router::new()
-        .route(
-            "/repos/{owner}/{repo}/pulls",
-            post(create_pr).get(list_prs),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}",
-            get(get_pr).patch(update_pr),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/close",
-            post(close_pr),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/reopen",
-            post(reopen_pr),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/diff",
-            get(get_pr_diff),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/mergeability",
-            get(check_mergeability),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/conflicts",
-            get(check_conflicts),
-        )
-        // NOTE: POST /repos/{owner}/{repo}/pulls/{id}/merge is in merge_engine::routes
-}
-
 /// Return a method router for the create-PR handler.
 ///
 /// This allows the central router to mount the creation endpoint separately
@@ -520,9 +474,4 @@ pub fn pull_request_routes_without_create() -> Router<AppState> {
             "/repos/{owner}/{repo}/pulls/{id}/conflicts",
             get(check_conflicts),
         )
-}
-
-/// Alias for [`pull_request_routes`] for convenience.
-pub fn pull_requests_routes() -> Router<AppState> {
-    pull_request_routes()
 }

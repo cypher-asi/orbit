@@ -240,27 +240,6 @@ async fn delete_repo(
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the Router for repository endpoints.
-///
-/// Mounts:
-/// - `POST   /repos`                          -- create repo
-/// - `GET    /repos`                           -- list accessible repos
-/// - `GET    /repos/{owner}/{repo}`            -- get repo metadata
-/// - `PATCH  /repos/{owner}/{repo}`            -- update repo metadata
-/// - `POST   /repos/{owner}/{repo}/archive`    -- archive repo
-/// - `DELETE /repos/{owner}/{repo}`            -- soft-delete repo
-/// - `GET    /users/{username}/repos`          -- list user's repos
-pub fn repo_routes() -> Router<AppState> {
-    Router::new()
-        .route("/repos", post(create_repo).get(list_accessible_repos))
-        .route(
-            "/repos/{owner}/{repo}",
-            get(get_repo).patch(update_repo).delete(delete_repo),
-        )
-        .route("/repos/{owner}/{repo}/archive", post(archive_repo))
-        .route("/users/{username}/repos", get(list_user_repos))
-}
-
 /// Return a method router for the create-repo handler.
 ///
 /// This allows the central router to mount the creation endpoint separately
