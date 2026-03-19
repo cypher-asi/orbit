@@ -2,9 +2,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
-use axum::body::Body;
-use tokio::io::AsyncWriteExt;
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 
 use crate::errors::ApiError;
 
@@ -103,91 +101,6 @@ impl GitCommand {
         }
     }
 
-    /// Run a Git command, piping the provided bytes to stdin.
-    ///
-    /// This is useful for commands like `git hash-object --stdin` or
-    /// other operations that read data from standard input.
-    pub async fn run_with_stdin(
-        &self,
-        args: &[&str],
-        stdin_data: &[u8],
-    ) -> Result<CommandOutput, ApiError> {
-        let mut child = Command::new("git")
-            .args(args)
-            .env("GIT_DIR", &self.repo_path)
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .stdin(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| {
-                tracing::error!(error = %e, args = ?args, "failed to spawn git process");
-                ApiError::Internal("failed to execute git command".to_string())
-            })?;
-
-        // Write stdin data and close the pipe.
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(stdin_data).await.map_err(|e| {
-                tracing::error!(error = %e, "failed to write to git process stdin");
-                ApiError::Internal("failed to write to git command stdin".to_string())
-            })?;
-            // Drop stdin to close the pipe so the process can finish reading.
-            drop(stdin);
-        }
-
-        let result = tokio::time::timeout(self.timeout, child.wait_with_output()).await;
-
-        match result {
-            Ok(Ok(output)) => {
-                let exit_code = output.status.code().unwrap_or(-1);
-                Ok(CommandOutput {
-                    stdout: output.stdout,
-                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-                    exit_code,
-                })
-            }
-            Ok(Err(e)) => {
-                tracing::error!(error = %e, args = ?args, "git process I/O error");
-                Err(ApiError::Internal("git command failed".to_string()))
-            }
-            Err(_) => {
-                tracing::error!(
-                    args = ?args,
-                    timeout_secs = self.timeout.as_secs(),
-                    "git command timed out"
-                );
-                Err(ApiError::Internal("git command timed out".to_string()))
-            }
-        }
-    }
-
-    /// Spawn a Git command for streaming I/O, used by Git HTTP transport.
-    ///
-    /// Returns the spawned `Child` process with stdin piped from the
-    /// provided `Body` and stdout/stderr available for streaming back
-    /// to the HTTP client.
-    ///
-    /// The caller is responsible for managing the child process lifetime,
-    /// streaming data in/out, and waiting for completion.
-    pub async fn run_streaming(&self, args: &[&str], _stdin_body: Body) -> Result<Child, ApiError> {
-        let child = Command::new("git")
-            .args(args)
-            .env("GIT_DIR", &self.repo_path)
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .stdin(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| {
-                tracing::error!(error = %e, args = ?args, "failed to spawn git streaming process");
-                ApiError::Internal("failed to execute git command".to_string())
-            })?;
-
-        Ok(child)
-    }
-
     /// Return a reference to the repository path this command targets.
     #[allow(dead_code)]
     pub fn repo_path(&self) -> &PathBuf {
@@ -262,39 +175,6 @@ mod tests {
         let output = cmd.run(&["rev-parse", "HEAD"]).await.unwrap();
         assert!(!output.success());
         assert!(!output.stderr.is_empty());
-    }
-
-    #[tokio::test]
-    async fn run_with_stdin_works() {
-        let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let repo_path = tmp.path().join("test.git");
-
-        // Initialize a bare repo first.
-        let init_output = tokio::process::Command::new("git")
-            .arg("init")
-            .arg("--bare")
-            .arg(&repo_path)
-            .output()
-            .await
-            .expect("failed to run git init");
-        assert!(init_output.status.success());
-
-        let cmd = GitCommand::new(repo_path);
-        let data = b"hello world\n";
-        let output = cmd
-            .run_with_stdin(&["hash-object", "--stdin"], data)
-            .await
-            .unwrap();
-        assert!(output.success());
-        // Should produce a hex hash (40 chars for SHA-1, 64 for SHA-256).
-        let stdout_str = String::from_utf8_lossy(&output.stdout);
-        let hash = stdout_str.trim();
-        assert!(hash.len() >= 40, "expected a hex hash, got: {}", hash);
-        assert!(
-            hash.chars().all(|c| c.is_ascii_hexdigit()),
-            "expected only hex characters, got: {}",
-            hash
-        );
     }
 
     #[tokio::test]

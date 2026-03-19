@@ -165,29 +165,6 @@ pub async fn delete_repo(config: &StorageConfig, repo_id: Uuid) -> Result<(), Ap
     Ok(())
 }
 
-/// Archive a bare repository on disk.
-///
-/// This is a placeholder implementation. In the future it could rename
-/// the directory, add a marker file, or move it to cold storage.
-/// For now it is a no-op that logs the intent.
-pub async fn archive_repo(config: &StorageConfig, repo_id: Uuid) -> Result<(), ApiError> {
-    let path = repo_path(config, repo_id);
-
-    if !path.exists() {
-        return Err(ApiError::NotFound(
-            "repository not found on disk".to_string(),
-        ));
-    }
-
-    tracing::info!(
-        repo_id = %repo_id,
-        path = %path.display(),
-        "archive_repo called (placeholder, no-op)"
-    );
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,24 +301,4 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
-    async fn archive_repo_placeholder_succeeds() {
-        let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let config = test_config(tmp.path());
-        let id = Uuid::new_v4();
-
-        init_bare_repo(&config, id, "main").await.unwrap();
-        let result = archive_repo(&config, id).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn archive_repo_returns_error_if_missing() {
-        let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let config = test_config(tmp.path());
-        let id = Uuid::new_v4();
-
-        let result = archive_repo(&config, id).await;
-        assert!(result.is_err());
-    }
 }

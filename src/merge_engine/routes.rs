@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     routing::post,
-    Json, Router,
+    Json,
 };
 use serde::Deserialize;
 use uuid::Uuid;
