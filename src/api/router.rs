@@ -6,6 +6,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
+use crate::api::rate_limit::RateLimitError;
 use crate::app_state::AppState;
 use crate::config::Config;
 
@@ -50,29 +51,29 @@ impl RateLimitLayers {
     /// Build all rate limit layers, using Redis when `redis_url` is configured
     /// and falling back to in-memory when it is not (or when Redis connection
     /// fails).
-    async fn build(config: &Config) -> Self {
+    async fn build(config: &Config) -> Result<Self, RateLimitError> {
         match config.redis_url.as_deref() {
             Some(redis_url) => {
                 tracing::info!("Building Redis-backed rate limit layers");
-                Self {
-                    auth: auth_rate_limit_layer_redis(redis_url).await,
-                    token: token_rate_limit_layer_redis(redis_url).await,
-                    repo_create: repo_create_rate_limit_layer_redis(redis_url).await,
-                    repo_write: repo_write_rate_limit_layer_redis(redis_url).await,
-                    admin_action: admin_action_rate_limit_layer_redis(redis_url).await,
-                    git_receive: git_receive_rate_limit_layer_redis(redis_url).await,
-                }
+                Ok(Self {
+                    auth: auth_rate_limit_layer_redis(redis_url).await?,
+                    token: token_rate_limit_layer_redis(redis_url).await?,
+                    repo_create: repo_create_rate_limit_layer_redis(redis_url).await?,
+                    repo_write: repo_write_rate_limit_layer_redis(redis_url).await?,
+                    admin_action: admin_action_rate_limit_layer_redis(redis_url).await?,
+                    git_receive: git_receive_rate_limit_layer_redis(redis_url).await?,
+                })
             }
             None => {
                 tracing::info!("Building in-memory rate limit layers (no REDIS_URL configured)");
-                Self {
-                    auth: auth_rate_limit_layer(),
-                    token: token_rate_limit_layer(),
-                    repo_create: repo_create_rate_limit_layer(),
-                    repo_write: repo_write_rate_limit_layer(),
-                    admin_action: admin_action_rate_limit_layer(),
-                    git_receive: git_receive_rate_limit_layer(),
-                }
+                Ok(Self {
+                    auth: auth_rate_limit_layer()?,
+                    token: token_rate_limit_layer()?,
+                    repo_create: repo_create_rate_limit_layer()?,
+                    repo_write: repo_write_rate_limit_layer()?,
+                    admin_action: admin_action_rate_limit_layer()?,
+                    git_receive: git_receive_rate_limit_layer()?,
+                })
             }
         }
     }
@@ -386,7 +387,10 @@ pub async fn build_router(state: AppState) -> anyhow::Result<Router> {
         .context("invalid x-request-id header name")?;
 
     // Build rate limit layers at startup, using Redis when configured.
-    let layers = RateLimitLayers::build(&state.config).await;
+    let layers = RateLimitLayers::build(&state.config)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
+        .context("build rate limit layers")?;
 
     // Versioned API under /v1 (same REST routes as root, plus discovery at GET /v1 and GET /v1/api).
     let v1_router = Router::new()
@@ -506,7 +510,9 @@ mod tests {
             redis_url: None,
             public_base_url: None,
         };
-        let layers = RateLimitLayers::build(&config).await;
+        let layers = RateLimitLayers::build(&config)
+            .await
+            .expect("in-memory rate limit config is valid");
         // Verify all layer fields are populated (they are -- this is a
         // compile-time + construction check).
         let _ = layers.auth.clone();

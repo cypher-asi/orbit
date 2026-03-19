@@ -78,7 +78,10 @@ fn validate_username(username: &str) -> Result<(), ApiError> {
         ));
     }
 
-    let first = username.chars().next().unwrap();
+    let first = username
+        .chars()
+        .next()
+        .ok_or_else(|| ApiError::BadRequest("username must be between 1 and 64 characters".to_string()))?;
     if !first.is_ascii_alphabetic() {
         return Err(ApiError::BadRequest(
             "username must start with a letter".to_string(),

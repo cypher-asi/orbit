@@ -386,12 +386,14 @@ pub async fn receive_pack(
     let response_body = Body::from_stream(stream);
 
     // Emit audit event for the push (fire-and-forget).
-    let actor_id = viewer_id.unwrap(); // safe: we checked viewer_id above
-    let repo_id = repo.id;
-    let db = state.db.clone();
-    tokio::spawn(async move {
-        storage::emit_audit_event(&db, actor_id, "push.received", Some(repo_id), None, None).await;
-    });
+    if let Some(actor_id) = viewer_id {
+        let repo_id = repo.id;
+        let db = state.db.clone();
+        tokio::spawn(async move {
+            storage::emit_audit_event(&db, actor_id, "push.received", Some(repo_id), None, None)
+                .await;
+        });
+    }
 
     Ok((
         StatusCode::OK,

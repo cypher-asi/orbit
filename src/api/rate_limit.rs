@@ -65,17 +65,20 @@ impl Default for RateLimitConfig {
 /// Result of a rate-limit check.
 pub type RateLimitResult = Result<bool, RateLimitError>;
 
-/// Errors that can occur when checking rate limits.
+/// Errors that can occur when checking rate limits or building rate limiters.
 #[derive(Debug)]
 pub enum RateLimitError {
     /// Redis backend encountered an error.
     BackendError(String),
+    /// Invalid rate limit configuration (e.g. requests_per_window is 0).
+    InvalidConfig(String),
 }
 
 impl std::fmt::Display for RateLimitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RateLimitError::BackendError(msg) => write!(f, "rate limit backend error: {}", msg),
+            RateLimitError::InvalidConfig(msg) => write!(f, "invalid rate limit config: {}", msg),
         }
     }
 }
@@ -120,33 +123,26 @@ pub struct InMemoryBackend {
 
 impl InMemoryBackend {
     /// Create a new in-memory rate limiter with the given configuration.
-    pub fn new(config: &RateLimitConfig) -> Self {
-        let per_window =
-            NonZeroU32::new(config.requests_per_window).expect("requests_per_window must be > 0");
+    ///
+    /// # Errors
+    /// Returns `RateLimitError::InvalidConfig` if `requests_per_window` is 0
+    /// or if the computed quota period is 0.
+    pub fn new(config: &RateLimitConfig) -> Result<Self, RateLimitError> {
+        let per_window = NonZeroU32::new(config.requests_per_window)
+            .ok_or_else(|| RateLimitError::InvalidConfig("requests_per_window must be > 0".to_string()))?;
 
-        let quota = Quota::with_period(std::time::Duration::from_secs(
-            config.window_secs / u64::from(config.requests_per_window.max(1)),
-        ))
-        .expect("quota period must be > 0")
-        .allow_burst(per_window);
+        let period_secs = config.window_secs / u64::from(config.requests_per_window.max(1));
+        let quota = Quota::with_period(std::time::Duration::from_secs(period_secs))
+            .ok_or_else(|| RateLimitError::InvalidConfig("quota period must be > 0".to_string()))?
+            .allow_burst(per_window);
 
         let limiter = Arc::new(IpKeyedLimiter::keyed(quota));
         let global_limiter = Arc::new(GlobalLimiter::direct(quota));
 
-        Self {
+        Ok(Self {
             limiter,
             global_limiter,
-        }
-    }
-
-    /// Synchronous check for a specific IP. Useful for testing.
-    pub fn check_ip_sync(&self, ip: &str) -> bool {
-        self.limiter.check_key(&ip.to_string()).is_ok()
-    }
-
-    /// Synchronous check for the global (non-keyed) limiter.
-    pub fn check_global_sync(&self) -> bool {
-        self.global_limiter.check().is_ok()
+        })
     }
 }
 
@@ -294,11 +290,14 @@ pub struct RateLimitState {
 
 impl RateLimitState {
     /// Create a new rate limiter with the in-memory backend.
-    pub fn new(config: &RateLimitConfig) -> Self {
-        Self {
-            backend: Arc::new(InMemoryBackend::new(config)),
+    ///
+    /// # Errors
+    /// Returns `RateLimitError::InvalidConfig` if the configuration is invalid.
+    pub fn new(config: &RateLimitConfig) -> Result<Self, RateLimitError> {
+        Ok(Self {
+            backend: Arc::new(InMemoryBackend::new(config)?),
             fail_open: true,
-        }
+        })
     }
 
     /// Create a new rate limiter with a Redis backend.
@@ -307,19 +306,6 @@ impl RateLimitState {
             backend: Arc::new(backend),
             fail_open: true,
         }
-    }
-
-    /// Create a new rate limiter with a custom backend.
-    pub fn with_backend(backend: Arc<dyn RateLimitBackend>) -> Self {
-        Self {
-            backend,
-            fail_open: true,
-        }
-    }
-
-    /// Set whether to fail open (allow requests) when the backend errors.
-    pub fn set_fail_open(&mut self, fail_open: bool) {
-        self.fail_open = fail_open;
     }
 
     /// Check whether the given IP is allowed to proceed.
@@ -333,51 +319,6 @@ impl RateLimitState {
             }
             Err(_) => false,
         }
-    }
-
-    /// Synchronous check for use with the in-memory backend only.
-    /// Falls back to allowing the request if the backend is not in-memory.
-    ///
-    /// This is primarily for backward compatibility with existing tests.
-    pub fn check_ip_sync(&self, ip: &str) -> bool {
-        // Use the async path via a temporary runtime or existing handle.
-        let backend = self.backend.clone();
-        let ip = ip.to_string();
-        let fail_open = self.fail_open;
-
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            // We are inside a tokio runtime -- spawn a thread to block on it
-            std::thread::scope(|s| {
-                s.spawn(|| {
-                    handle.block_on(async {
-                        match backend.check_key(&ip).await {
-                            Ok(allowed) => allowed,
-                            Err(_) if fail_open => true,
-                            Err(_) => false,
-                        }
-                    })
-                })
-                .join()
-                .unwrap_or(true)
-            })
-        } else {
-            // No runtime, create a temporary one
-            let rt = tokio::runtime::Runtime::new().expect("failed to create runtime");
-            rt.block_on(async {
-                match backend.check_key(&ip).await {
-                    Ok(allowed) => allowed,
-                    Err(_) if fail_open => true,
-                    Err(_) => false,
-                }
-            })
-        }
-    }
-
-    /// Synchronous check for the global (non-keyed) limiter.
-    ///
-    /// For backward compatibility with existing tests.
-    pub fn check_global_sync(&self) -> bool {
-        self.check_ip_sync("unknown")
     }
 }
 
@@ -394,23 +335,14 @@ pub struct RateLimitLayer {
 }
 
 impl RateLimitLayer {
-    /// Create a new rate-limit layer with the given state.
-    pub fn new(state: RateLimitState) -> Self {
-        Self { state }
-    }
-
-    /// Create a new rate-limit layer with default in-memory configuration.
-    pub fn with_defaults() -> Self {
-        Self {
-            state: RateLimitState::new(&RateLimitConfig::default()),
-        }
-    }
-
     /// Create a new rate-limit layer with a custom in-memory configuration.
-    pub fn with_config(config: &RateLimitConfig) -> Self {
-        Self {
-            state: RateLimitState::new(config),
-        }
+    ///
+    /// # Errors
+    /// Returns `RateLimitError::InvalidConfig` if the configuration is invalid.
+    pub fn with_config(config: &RateLimitConfig) -> Result<Self, RateLimitError> {
+        Ok(Self {
+            state: RateLimitState::new(config)?,
+        })
     }
 
     /// Create a new rate-limit layer backed by Redis.
@@ -558,7 +490,7 @@ where
 ///
 /// Limits: 10 requests per 60 seconds per IP.
 /// This is intentionally conservative to prevent brute-force login attempts.
-pub fn auth_rate_limit_layer() -> RateLimitLayer {
+pub fn auth_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 10,
         window_secs: 60,
@@ -571,7 +503,7 @@ pub fn auth_rate_limit_layer() -> RateLimitLayer {
 /// Limits: 20 requests per 60 seconds per IP.
 /// More permissive than login since token creation requires authentication,
 /// but still rate-limited to prevent abuse.
-pub fn token_rate_limit_layer() -> RateLimitLayer {
+pub fn token_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 20,
         window_secs: 60,
@@ -582,7 +514,9 @@ pub fn token_rate_limit_layer() -> RateLimitLayer {
 /// Create a [`RateLimitLayer`] for auth endpoints backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn auth_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
+pub async fn auth_rate_limit_layer_redis(
+    redis_url: &str,
+) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 10,
         window_secs: 60,
@@ -590,7 +524,7 @@ pub async fn auth_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
     match RedisBackend::new(redis_url, &config, "orbit:rl:auth").await {
         Ok(backend) => {
             tracing::info!("Using Redis-backed rate limiter for auth endpoints");
-            RateLimitLayer::with_redis(backend)
+            Ok(RateLimitLayer::with_redis(backend))
         }
         Err(e) => {
             tracing::warn!(
@@ -605,7 +539,9 @@ pub async fn auth_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
 /// Create a [`RateLimitLayer`] for token creation endpoints backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn token_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
+pub async fn token_rate_limit_layer_redis(
+    redis_url: &str,
+) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 20,
         window_secs: 60,
@@ -613,7 +549,7 @@ pub async fn token_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
     match RedisBackend::new(redis_url, &config, "orbit:rl:token").await {
         Ok(backend) => {
             tracing::info!("Using Redis-backed rate limiter for token endpoints");
-            RateLimitLayer::with_redis(backend)
+            Ok(RateLimitLayer::with_redis(backend))
         }
         Err(e) => {
             tracing::warn!(
@@ -629,7 +565,7 @@ pub async fn token_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
 ///
 /// Limits: 30 requests per 60 seconds per IP.
 /// Prevents mass creation of repositories by a single IP.
-pub fn repo_create_rate_limit_layer() -> RateLimitLayer {
+pub fn repo_create_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -643,7 +579,7 @@ pub fn repo_create_rate_limit_layer() -> RateLimitLayer {
 /// Limits: 30 requests per 60 seconds per IP.
 /// These operations are computationally expensive and should be protected
 /// against automated abuse.
-pub fn repo_write_rate_limit_layer() -> RateLimitLayer {
+pub fn repo_write_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -658,7 +594,7 @@ pub fn repo_write_rate_limit_layer() -> RateLimitLayer {
 /// Limits: 30 requests per 60 seconds per IP.
 /// Admin endpoints are already behind authentication and admin-role checks,
 /// but rate limiting adds defense-in-depth.
-pub fn admin_action_rate_limit_layer() -> RateLimitLayer {
+pub fn admin_action_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -671,7 +607,7 @@ pub fn admin_action_rate_limit_layer() -> RateLimitLayer {
 /// Limits: 30 requests per 60 seconds per IP.
 /// Git push operations are expensive (disk I/O, pack processing) and should
 /// be rate-limited to prevent abuse.
-pub fn git_receive_rate_limit_layer() -> RateLimitLayer {
+pub fn git_receive_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -682,7 +618,9 @@ pub fn git_receive_rate_limit_layer() -> RateLimitLayer {
 /// Create a [`RateLimitLayer`] for repo creation backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn repo_create_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
+pub async fn repo_create_rate_limit_layer_redis(
+    redis_url: &str,
+) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -690,7 +628,7 @@ pub async fn repo_create_rate_limit_layer_redis(redis_url: &str) -> RateLimitLay
     match RedisBackend::new(redis_url, &config, "orbit:rl:repo_create").await {
         Ok(backend) => {
             tracing::info!("Using Redis-backed rate limiter for repo creation");
-            RateLimitLayer::with_redis(backend)
+            Ok(RateLimitLayer::with_redis(backend))
         }
         Err(e) => {
             tracing::warn!(
@@ -705,7 +643,9 @@ pub async fn repo_create_rate_limit_layer_redis(redis_url: &str) -> RateLimitLay
 /// Create a [`RateLimitLayer`] for write-heavy repo operations backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn repo_write_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
+pub async fn repo_write_rate_limit_layer_redis(
+    redis_url: &str,
+) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -713,7 +653,7 @@ pub async fn repo_write_rate_limit_layer_redis(redis_url: &str) -> RateLimitLaye
     match RedisBackend::new(redis_url, &config, "orbit:rl:repo_write").await {
         Ok(backend) => {
             tracing::info!("Using Redis-backed rate limiter for repo write operations");
-            RateLimitLayer::with_redis(backend)
+            Ok(RateLimitLayer::with_redis(backend))
         }
         Err(e) => {
             tracing::warn!(
@@ -728,7 +668,9 @@ pub async fn repo_write_rate_limit_layer_redis(redis_url: &str) -> RateLimitLaye
 /// Create a [`RateLimitLayer`] for admin actions backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn admin_action_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
+pub async fn admin_action_rate_limit_layer_redis(
+    redis_url: &str,
+) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -736,7 +678,7 @@ pub async fn admin_action_rate_limit_layer_redis(redis_url: &str) -> RateLimitLa
     match RedisBackend::new(redis_url, &config, "orbit:rl:admin").await {
         Ok(backend) => {
             tracing::info!("Using Redis-backed rate limiter for admin actions");
-            RateLimitLayer::with_redis(backend)
+            Ok(RateLimitLayer::with_redis(backend))
         }
         Err(e) => {
             tracing::warn!(
@@ -751,7 +693,9 @@ pub async fn admin_action_rate_limit_layer_redis(redis_url: &str) -> RateLimitLa
 /// Create a [`RateLimitLayer`] for Git push operations backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn git_receive_rate_limit_layer_redis(redis_url: &str) -> RateLimitLayer {
+pub async fn git_receive_rate_limit_layer_redis(
+    redis_url: &str,
+) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -759,7 +703,7 @@ pub async fn git_receive_rate_limit_layer_redis(redis_url: &str) -> RateLimitLay
     match RedisBackend::new(redis_url, &config, "orbit:rl:git_push").await {
         Ok(backend) => {
             tracing::info!("Using Redis-backed rate limiter for git push operations");
-            RateLimitLayer::with_redis(backend)
+            Ok(RateLimitLayer::with_redis(backend))
         }
         Err(e) => {
             tracing::warn!(
@@ -786,54 +730,44 @@ mod tests {
         assert_eq!(config.window_secs, 60);
     }
 
-    #[test]
-    fn rate_limit_state_creation() {
+    #[tokio::test]
+    async fn rate_limit_state_creation() {
         let config = RateLimitConfig {
             requests_per_window: 5,
             window_secs: 30,
         };
-        // Verify state can be constructed with in-memory backend
-        let _state = RateLimitState::new(&config);
-        // Should allow initial requests via the in-memory backend
-        let backend = InMemoryBackend::new(&config);
-        assert!(backend.check_ip_sync("127.0.0.1"));
-        assert!(backend.check_global_sync());
+        let _state = RateLimitState::new(&config).unwrap();
+        let backend = InMemoryBackend::new(&config).unwrap();
+        assert!(backend.check_key("127.0.0.1").await.unwrap());
+        assert!(backend.check_key("unknown").await.unwrap());
     }
 
-    #[test]
-    fn in_memory_backend_per_ip_isolation() {
+    #[tokio::test]
+    async fn in_memory_backend_per_ip_isolation() {
         let config = RateLimitConfig {
             requests_per_window: 2,
             window_secs: 60,
         };
-        let backend = InMemoryBackend::new(&config);
+        let backend = InMemoryBackend::new(&config).unwrap();
 
-        // Exhaust limit for IP A
-        assert!(backend.check_ip_sync("10.0.0.1"));
-        assert!(backend.check_ip_sync("10.0.0.1"));
-
-        // IP A should be limited
-        assert!(!backend.check_ip_sync("10.0.0.1"));
-
-        // IP B should still be allowed
-        assert!(backend.check_ip_sync("10.0.0.2"));
+        assert!(backend.check_key("10.0.0.1").await.unwrap());
+        assert!(backend.check_key("10.0.0.1").await.unwrap());
+        assert!(!backend.check_key("10.0.0.1").await.unwrap());
+        assert!(backend.check_key("10.0.0.2").await.unwrap());
     }
 
-    #[test]
-    fn in_memory_backend_exhaustion() {
+    #[tokio::test]
+    async fn in_memory_backend_exhaustion() {
         let config = RateLimitConfig {
             requests_per_window: 3,
             window_secs: 60,
         };
-        let backend = InMemoryBackend::new(&config);
+        let backend = InMemoryBackend::new(&config).unwrap();
 
-        // Use up all 3 allowed requests
-        assert!(backend.check_ip_sync("192.168.1.1"));
-        assert!(backend.check_ip_sync("192.168.1.1"));
-        assert!(backend.check_ip_sync("192.168.1.1"));
-
-        // The 4th request should be denied
-        assert!(!backend.check_ip_sync("192.168.1.1"));
+        for _ in 0..3 {
+            assert!(backend.check_key("192.168.1.1").await.unwrap());
+        }
+        assert!(!backend.check_key("192.168.1.1").await.unwrap());
     }
 
     #[test]
@@ -886,75 +820,71 @@ mod tests {
 
     #[test]
     fn layer_clones() {
-        let layer = RateLimitLayer::with_defaults();
+        let config = RateLimitConfig::default();
+        let layer = RateLimitLayer::with_config(&config).unwrap();
         let _layer2 = layer.clone();
     }
 
     #[test]
     fn auth_rate_limit_layer_creates() {
-        let _layer = auth_rate_limit_layer();
+        let _layer = auth_rate_limit_layer().unwrap();
     }
 
     #[test]
     fn token_rate_limit_layer_creates() {
-        let _layer = token_rate_limit_layer();
+        let _layer = token_rate_limit_layer().unwrap();
     }
 
     #[test]
     fn repo_create_rate_limit_layer_creates() {
-        let _layer = repo_create_rate_limit_layer();
+        let _layer = repo_create_rate_limit_layer().unwrap();
     }
 
     #[test]
     fn repo_write_rate_limit_layer_creates() {
-        let _layer = repo_write_rate_limit_layer();
+        let _layer = repo_write_rate_limit_layer().unwrap();
     }
 
     #[test]
     fn admin_action_rate_limit_layer_creates() {
-        let _layer = admin_action_rate_limit_layer();
+        let _layer = admin_action_rate_limit_layer().unwrap();
     }
 
     #[test]
     fn git_receive_rate_limit_layer_creates() {
-        let _layer = git_receive_rate_limit_layer();
+        let _layer = git_receive_rate_limit_layer().unwrap();
     }
 
-    #[test]
-    fn repo_create_rate_limit_allows_30_per_minute() {
+    #[tokio::test]
+    async fn repo_create_rate_limit_allows_30_per_minute() {
         let config = RateLimitConfig {
             requests_per_window: 30,
             window_secs: 60,
         };
-        let backend = InMemoryBackend::new(&config);
+        let backend = InMemoryBackend::new(&config).unwrap();
 
-        // Should allow 30 requests
         for i in 0..30 {
             assert!(
-                backend.check_ip_sync("10.0.0.200"),
-                "request {} should be allowed under repo create rate limit",
+                backend.check_key("10.0.0.200").await.unwrap(),
+                "request {} should be allowed",
                 i + 1,
             );
         }
-
-        // 31st should be denied
-        assert!(!backend.check_ip_sync("10.0.0.200"));
+        assert!(!backend.check_key("10.0.0.200").await.unwrap());
     }
 
-    #[test]
-    fn token_rate_limit_is_more_permissive() {
-        // Token creation rate limit allows 20 per minute vs 10 for login
+    #[tokio::test]
+    async fn token_rate_limit_is_more_permissive() {
         let config = RateLimitConfig {
             requests_per_window: 20,
             window_secs: 60,
         };
-        let backend = InMemoryBackend::new(&config);
+        let backend = InMemoryBackend::new(&config).unwrap();
 
-        // Should allow more than 10 requests (which is the login limit)
         for i in 0..15 {
             assert!(
-                backend.check_ip_sync("10.0.0.100"),
-                "request {} should be allowed under token rate limit",
+                backend.check_key("10.0.0.100").await.unwrap(),
+                "request {} should be allowed",
                 i + 1,
             );
         }
@@ -978,7 +908,7 @@ mod tests {
             requests_per_window: 5,
             window_secs: 60,
         };
-        let layer = RateLimitLayer::with_config(&config);
+        let layer = RateLimitLayer::with_config(&config).unwrap();
         let mut svc = layer.layer(svc);
 
         // First request should succeed
@@ -1007,7 +937,7 @@ mod tests {
             requests_per_window: 2,
             window_secs: 60,
         };
-        let layer = RateLimitLayer::with_config(&config);
+        let layer = RateLimitLayer::with_config(&config).unwrap();
         let mut svc = layer.layer(svc);
 
         // Send 2 allowed requests
@@ -1054,7 +984,7 @@ mod tests {
             requests_per_window: 1,
             window_secs: 60,
         };
-        let layer = RateLimitLayer::with_config(&config);
+        let layer = RateLimitLayer::with_config(&config).unwrap();
         let mut svc = layer.layer(svc);
 
         // Exhaust limit for IP A
@@ -1088,7 +1018,7 @@ mod tests {
             requests_per_window: 2,
             window_secs: 60,
         };
-        let backend = InMemoryBackend::new(&config);
+        let backend = InMemoryBackend::new(&config).unwrap();
 
         // Should allow first two requests
         assert!(backend.check_key("10.0.0.1").await.unwrap());
@@ -1107,80 +1037,10 @@ mod tests {
             requests_per_window: 2,
             window_secs: 60,
         };
-        let state = RateLimitState::new(&config);
+        let state = RateLimitState::new(&config).unwrap();
 
         assert!(state.check_ip("10.0.0.1").await);
         assert!(state.check_ip("10.0.0.1").await);
-        assert!(!state.check_ip("10.0.0.1").await);
-    }
-
-    #[tokio::test]
-    async fn rate_limit_state_with_custom_backend() {
-        /// A test backend that always allows requests.
-        #[derive(Clone)]
-        struct AlwaysAllowBackend;
-
-        impl RateLimitBackend for AlwaysAllowBackend {
-            fn check_key(
-                &self,
-                _key: &str,
-            ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
-                Box::pin(std::future::ready(Ok(true)))
-            }
-        }
-
-        let state = RateLimitState::with_backend(Arc::new(AlwaysAllowBackend));
-
-        // Should always allow
-        for _ in 0..100 {
-            assert!(state.check_ip("10.0.0.1").await);
-        }
-    }
-
-    #[tokio::test]
-    async fn rate_limit_state_fail_open_on_error() {
-        /// A test backend that always errors.
-        #[derive(Clone)]
-        struct ErrorBackend;
-
-        impl RateLimitBackend for ErrorBackend {
-            fn check_key(
-                &self,
-                _key: &str,
-            ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
-                Box::pin(std::future::ready(Err(RateLimitError::BackendError(
-                    "test error".to_string(),
-                ))))
-            }
-        }
-
-        let state = RateLimitState::with_backend(Arc::new(ErrorBackend));
-
-        // Should fail open (allow) by default
-        assert!(state.check_ip("10.0.0.1").await);
-    }
-
-    #[tokio::test]
-    async fn rate_limit_state_fail_closed_on_error() {
-        /// A test backend that always errors.
-        #[derive(Clone)]
-        struct ErrorBackend;
-
-        impl RateLimitBackend for ErrorBackend {
-            fn check_key(
-                &self,
-                _key: &str,
-            ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
-                Box::pin(std::future::ready(Err(RateLimitError::BackendError(
-                    "test error".to_string(),
-                ))))
-            }
-        }
-
-        let mut state = RateLimitState::with_backend(Arc::new(ErrorBackend));
-        state.set_fail_open(false);
-
-        // Should fail closed (deny) when configured
         assert!(!state.check_ip("10.0.0.1").await);
     }
 
@@ -1205,24 +1065,4 @@ mod tests {
         assert!(display.contains("rate limit backend error"));
     }
 
-    #[tokio::test]
-    async fn rate_limit_layer_with_redis_constructor() {
-        // Test that the layer can be constructed with a custom backend
-        // (simulating Redis without actual Redis connection)
-        #[derive(Clone)]
-        struct FakeRedisBackend;
-
-        impl RateLimitBackend for FakeRedisBackend {
-            fn check_key(
-                &self,
-                _key: &str,
-            ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
-                Box::pin(std::future::ready(Ok(true)))
-            }
-        }
-
-        let state = RateLimitState::with_backend(Arc::new(FakeRedisBackend));
-        let layer = RateLimitLayer::new(state);
-        let _layer2 = layer.clone();
-    }
 }
