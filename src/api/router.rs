@@ -15,11 +15,10 @@ use anyhow::Context;
 use super::discovery::discovery;
 use super::health::health_check;
 use super::rate_limit::{
-    admin_action_rate_limit_layer, admin_action_rate_limit_layer_redis, auth_rate_limit_layer,
-    auth_rate_limit_layer_redis, git_receive_rate_limit_layer, git_receive_rate_limit_layer_redis,
-    repo_create_rate_limit_layer, repo_create_rate_limit_layer_redis, repo_write_rate_limit_layer,
-    repo_write_rate_limit_layer_redis, token_rate_limit_layer, token_rate_limit_layer_redis,
-    RateLimitLayer,
+    admin_action_rate_limit_layer, admin_action_rate_limit_layer_redis,
+    git_receive_rate_limit_layer, git_receive_rate_limit_layer_redis, repo_create_rate_limit_layer,
+    repo_create_rate_limit_layer_redis, repo_write_rate_limit_layer,
+    repo_write_rate_limit_layer_redis, RateLimitLayer,
 };
 
 // ---------------------------------------------------------------------------
@@ -33,10 +32,6 @@ use super::rate_limit::{
 /// This avoids making individual route-group functions async and keeps
 /// layer construction centralized.
 struct RateLimitLayers {
-    /// Rate limit layer for auth login/register endpoints (10 req/min per IP).
-    auth: RateLimitLayer,
-    /// Rate limit layer for token creation endpoints (20 req/min per IP).
-    token: RateLimitLayer,
     /// Rate limit layer for repo creation (30 req/min per IP).
     repo_create: RateLimitLayer,
     /// Rate limit layer for write-heavy repo operations (30 req/min per IP).
@@ -56,8 +51,6 @@ impl RateLimitLayers {
             Some(redis_url) => {
                 tracing::info!("Building Redis-backed rate limit layers");
                 Ok(Self {
-                    auth: auth_rate_limit_layer_redis(redis_url).await?,
-                    token: token_rate_limit_layer_redis(redis_url).await?,
                     repo_create: repo_create_rate_limit_layer_redis(redis_url).await?,
                     repo_write: repo_write_rate_limit_layer_redis(redis_url).await?,
                     admin_action: admin_action_rate_limit_layer_redis(redis_url).await?,
@@ -67,8 +60,6 @@ impl RateLimitLayers {
             None => {
                 tracing::info!("Building in-memory rate limit layers (no REDIS_URL configured)");
                 Ok(Self {
-                    auth: auth_rate_limit_layer()?,
-                    token: token_rate_limit_layer()?,
                     repo_create: repo_create_rate_limit_layer()?,
                     repo_write: repo_write_rate_limit_layer()?,
                     admin_action: admin_action_rate_limit_layer()?,
@@ -471,8 +462,6 @@ mod tests {
             .expect("in-memory rate limit config is valid");
         // Verify all layer fields are populated (they are -- this is a
         // compile-time + construction check).
-        let _ = layers.auth.clone();
-        let _ = layers.token.clone();
         let _ = layers.repo_create.clone();
         let _ = layers.repo_write.clone();
         let _ = layers.admin_action.clone();

@@ -491,6 +491,7 @@ where
 ///
 /// Limits: 10 requests per 60 seconds per IP.
 /// This is intentionally conservative to prevent brute-force login attempts.
+#[allow(dead_code)]
 pub(crate) fn auth_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 10,
@@ -504,6 +505,7 @@ pub(crate) fn auth_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> 
 /// Limits: 20 requests per 60 seconds per IP.
 /// More permissive than login since token creation requires authentication,
 /// but still rate-limited to prevent abuse.
+#[allow(dead_code)]
 pub(crate) fn token_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 20,
@@ -515,6 +517,7 @@ pub(crate) fn token_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError>
 /// Create a [`RateLimitLayer`] for auth endpoints backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
+#[allow(dead_code)]
 pub(crate) async fn auth_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
@@ -540,6 +543,7 @@ pub(crate) async fn auth_rate_limit_layer_redis(
 /// Create a [`RateLimitLayer`] for token creation endpoints backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
+#[allow(dead_code)]
 pub(crate) async fn token_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
