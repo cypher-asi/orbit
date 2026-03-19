@@ -1,3 +1,4 @@
+use axum::http::header::HeaderName;
 use axum::{routing::get, Router};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -7,6 +8,8 @@ use tower_http::{
 
 use crate::app_state::AppState;
 use crate::config::Config;
+
+use anyhow::Context;
 
 use super::discovery::discovery;
 use super::health::health_check;
@@ -269,26 +272,27 @@ const REQUEST_ID_HEADER: &str = "x-request-id";
 /// When `config.cors_allowed_origins` is empty, any origin is allowed
 /// (suitable for development). When one or more origins are specified,
 /// only those origins are permitted (suitable for production).
-fn build_cors_layer(config: &Config) -> CorsLayer {
+fn build_cors_layer(
+    config: &Config,
+    request_id_header: &HeaderName,
+) -> anyhow::Result<CorsLayer> {
     let base = CorsLayer::new()
         .allow_methods(Any)
         .allow_headers(Any)
-        .expose_headers([REQUEST_ID_HEADER.parse().unwrap()]);
+        .expose_headers([request_id_header.clone()]);
 
     if config.cors_allowed_origins.is_empty() {
-        // Development: allow all origins
-        base.allow_origin(Any)
+        Ok(base.allow_origin(Any))
     } else {
-        // Production: restrict to configured origins
         let origins: Vec<axum::http::HeaderValue> = config
             .cors_allowed_origins
             .iter()
             .map(|o| {
                 o.parse()
-                    .unwrap_or_else(|_| panic!("Invalid CORS origin: {}", o))
+                    .with_context(|| format!("Invalid CORS origin: {}", o))
             })
-            .collect();
-        base.allow_origin(origins)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(base.allow_origin(origins))
     }
 }
 
@@ -299,25 +303,27 @@ fn build_cors_layer(config: &Config) -> CorsLayer {
 /// 2. **Tracing** -- logs method, path, status, and duration
 /// 3. **CORS** -- configurable allowed origins (permissive when unset)
 /// 4. **Propagate Request ID** -- copies request ID to response headers
-fn apply_middleware(router: Router<AppState>, config: &Config) -> Router<AppState> {
-    let cors = build_cors_layer(config);
+fn apply_middleware(
+    router: Router<AppState>,
+    config: &Config,
+    request_id_header: &HeaderName,
+) -> anyhow::Result<Router<AppState>> {
+    let cors = build_cors_layer(config, request_id_header)?;
 
-    let x_request_id = REQUEST_ID_HEADER.parse().unwrap();
-
-    router
+    let request_id_header = request_id_header.clone();
+    let request_id_header_for_trace = request_id_header.clone();
+    Ok(router
         // Propagate x-request-id from request to response
-        .layer(PropagateRequestIdLayer::new(
-            REQUEST_ID_HEADER.parse().unwrap(),
-        ))
+        .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         // CORS headers
         .layer(cors)
         // Request tracing (logs method, URI, status, latency)
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(|request: &axum::http::Request<_>| {
+                .make_span_with(move |request: &axum::http::Request<_>| {
                     let request_id = request
                         .headers()
-                        .get(REQUEST_ID_HEADER)
+                        .get(&request_id_header_for_trace)
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("-");
                     tracing::info_span!(
@@ -340,7 +346,7 @@ fn apply_middleware(router: Router<AppState>, config: &Config) -> Router<AppStat
                 ),
         )
         // Set x-request-id (UUID v4) on incoming requests
-        .layer(SetRequestIdLayer::new(x_request_id, MakeRequestUuid))
+        .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid)))
 }
 
 // ---------------------------------------------------------------------------
@@ -374,7 +380,11 @@ fn apply_middleware(router: Router<AppState>, config: &Config) -> Router<AppStat
 /// all rate limiters use Redis as a shared backend for consistent rate limiting
 /// across multiple server instances. Otherwise, in-memory governor-based rate
 /// limiters are used.
-pub async fn build_router(state: AppState) -> Router {
+pub async fn build_router(state: AppState) -> anyhow::Result<Router> {
+    let request_id_header = REQUEST_ID_HEADER
+        .parse::<HeaderName>()
+        .context("invalid x-request-id header name")?;
+
     // Build rate limit layers at startup, using Redis when configured.
     let layers = RateLimitLayers::build(&state.config).await;
 
@@ -408,7 +418,8 @@ pub async fn build_router(state: AppState) -> Router {
         .merge(git_http_routes(&layers));
 
     // Apply the middleware stack and attach shared state
-    apply_middleware(app, &state.config).with_state(state)
+    let app = apply_middleware(app, &state.config, &request_id_header)?;
+    Ok(app.with_state(state))
 }
 
 // ---------------------------------------------------------------------------
@@ -441,7 +452,8 @@ mod tests {
             redis_url: None,
             public_base_url: None,
         };
-        let _cors = build_cors_layer(&config);
+        let header = REQUEST_ID_HEADER.parse().unwrap();
+        let _cors = build_cors_layer(&config, &header).unwrap();
     }
 
     #[test]
@@ -460,12 +472,12 @@ mod tests {
             redis_url: None,
             public_base_url: None,
         };
-        let _cors = build_cors_layer(&config);
+        let header = REQUEST_ID_HEADER.parse().unwrap();
+        let _cors = build_cors_layer(&config, &header).unwrap();
     }
 
     #[test]
-    #[should_panic(expected = "Invalid CORS origin")]
-    fn cors_layer_panics_on_invalid_origin() {
+    fn cors_layer_errors_on_invalid_origin() {
         let config = Config {
             database_url: String::new(),
             server_host: String::new(),
@@ -476,7 +488,8 @@ mod tests {
             redis_url: None,
             public_base_url: None,
         };
-        let _cors = build_cors_layer(&config);
+        let header = REQUEST_ID_HEADER.parse().unwrap();
+        assert!(build_cors_layer(&config, &header).is_err());
     }
 
     #[tokio::test]

@@ -1,5 +1,7 @@
 use std::env;
 
+use anyhow::Context;
+
 /// Application configuration loaded from environment variables.
 ///
 /// Supports `.env` file fallback via `dotenvy`.
@@ -43,20 +45,23 @@ impl Config {
     ///
     /// Attempts to read a `.env` file first (silently ignored if absent),
     /// then reads each variable from the environment. Variables with
-    /// defaults are optional; the rest are required and will cause a
-    /// panic with a descriptive message if missing.
-    pub fn load() -> Self {
+    /// defaults are optional; the rest are required.
+    ///
+    /// # Errors
+    /// Returns an error if required variables are missing or invalid.
+    pub fn load() -> anyhow::Result<Self> {
         // Load .env file if present; ignore errors (file may not exist).
         let _ = dotenvy::dotenv();
 
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let database_url =
+            env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
 
         let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
         let server_port = env::var("SERVER_PORT")
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()
-            .expect("SERVER_PORT must be a valid u16");
+            .context("SERVER_PORT must be a valid u16")?;
 
         let git_storage_root =
             env::var("GIT_STORAGE_ROOT").unwrap_or_else(|_| "./data/repos".to_string());
@@ -74,7 +79,7 @@ impl Config {
 
         let public_base_url = env::var("PUBLIC_BASE_URL").ok().filter(|s| !s.is_empty());
 
-        Config {
+        Ok(Config {
             database_url,
             server_host,
             server_port,
@@ -83,7 +88,7 @@ impl Config {
             cors_allowed_origins,
             redis_url,
             public_base_url,
-        }
+        })
     }
 
     /// Base URL for the REST API and Git clone (with trailing slash removed).
@@ -108,6 +113,7 @@ mod tests {
     use std::env;
 
     #[test]
+    #[serial_test::serial]
     fn load_with_defaults() {
         // SAFETY: Tests are run with --test-threads=1 or accept the
         // inherent race when mutating the environment in tests.
@@ -125,7 +131,7 @@ mod tests {
             env::remove_var("PUBLIC_BASE_URL");
         }
 
-        let config = Config::load();
+        let config = Config::load().expect("load with defaults");
 
         assert_eq!(config.database_url, "postgres://localhost/orbit_test");
         assert_eq!(config.server_host, "0.0.0.0");
@@ -138,9 +144,10 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn load_with_custom_values() {
-        // SAFETY: See note in load_with_defaults. Set all vars again immediately
-        // before load() to reduce the window for parallel tests overwriting them.
+        // SAFETY: See note in load_with_defaults. Set all vars in one block
+        // immediately before load() to reduce the window for parallel tests.
         unsafe {
             env::set_var("DATABASE_URL", "postgres://db:5432/orbit");
             env::set_var("SERVER_HOST", "127.0.0.1");
@@ -153,11 +160,7 @@ mod tests {
             );
             env::remove_var("PUBLIC_BASE_URL");
         }
-
-        unsafe {
-            env::set_var("DATABASE_URL", "postgres://db:5432/orbit");
-        }
-        let config = Config::load();
+        let config = Config::load().expect("load with custom values");
 
         assert_eq!(config.database_url, "postgres://db:5432/orbit");
         assert_eq!(config.server_host, "127.0.0.1");

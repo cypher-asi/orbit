@@ -21,18 +21,20 @@ mod users;
 use std::fs;
 use std::path::PathBuf;
 
+use anyhow::Context;
 use tokio::sync::watch;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     // Load configuration from env / .env file
-    let config = config::Config::load();
+    let config = config::Config::load().context("load configuration")?;
 
     // Initialize tracing/logging (JSON in production, pretty otherwise)
     events::logging::init_logging(&config.log_level);
 
     tracing::info!("Creating database connection pool");
-    let pool = db::create_pool(&config.database_url).expect("Failed to create database pool");
+    let pool = db::create_pool(&config.database_url)
+        .context("create database pool")?;
 
     // Attempt to run database migrations; log a warning if the database
     // is not yet reachable so the server can still start for health checks.
@@ -51,7 +53,8 @@ async fn main() {
     // Ensure git storage root directory exists
     let git_storage_path = std::path::Path::new(&config.git_storage_root);
     if !git_storage_path.exists() {
-        fs::create_dir_all(git_storage_path).expect("Failed to create git storage root directory");
+        fs::create_dir_all(git_storage_path)
+            .with_context(|| format!("create git storage root directory: {}", config.git_storage_root))?;
         tracing::info!(path = %config.git_storage_root, "Created git storage root directory");
     }
 
@@ -62,7 +65,7 @@ async fn main() {
     let worker_pool = state.db.clone();
 
     // Build router via the central router composition
-    let app = api::router::build_router(state).await;
+    let app = api::router::build_router(state).await.context("build router")?;
 
     let bind_addr = format!("{}:{}", config.server_host, config.server_port);
     tracing::info!(address = %bind_addr, "Orbit server starting");
@@ -74,11 +77,13 @@ async fn main() {
             let fallback_addr = format!("{}:0", config.server_host);
             tokio::net::TcpListener::bind(&fallback_addr)
                 .await
-                .expect("Failed to bind TCP listener on fallback port")
+                .context("bind TCP listener on fallback port")?
         }
     };
 
-    let actual_addr = listener.local_addr().expect("Failed to get local address");
+    let actual_addr = listener
+        .local_addr()
+        .context("get listener local address")?;
     tracing::info!(address = %actual_addr, "Orbit server listening");
 
     // Create a shutdown signal channel for graceful shutdown.
@@ -95,18 +100,19 @@ async fn main() {
 
     // Run the HTTP server with graceful shutdown on Ctrl+C.
     let server = axum::serve(listener, app).with_graceful_shutdown(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to listen for Ctrl+C");
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::error!(error = %e, "Failed to listen for Ctrl+C");
+            std::process::exit(1);
+        }
         tracing::info!("received Ctrl+C, initiating graceful shutdown");
-        // Signal the worker to stop.
         let _ = shutdown_tx.send(true);
     });
 
-    server.await.expect("Server error");
+    server.await.context("HTTP server")?;
 
     // Wait for the worker to finish its current job and exit.
     tracing::info!("waiting for background job worker to shut down");
     let _ = worker_handle.await;
     tracing::info!("Orbit server shut down");
+    Ok(())
 }
