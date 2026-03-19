@@ -1,8 +1,7 @@
 <h1 align="center">ORBIT</h1>
 
 <p align="center">
-  <b>GitHub-lite Git Service</b><br>
-  A lightweight super fast git server with a REST API for repos, branches, commits, pull requests, and merge, plus Git Smart HTTP for clone, fetch, and push.
+  <b>GitHub-lite Git Service</b>
 </p>
 
 <p align="center">
