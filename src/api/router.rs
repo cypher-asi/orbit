@@ -83,59 +83,12 @@ impl RateLimitLayers {
 // Route group builders
 // ---------------------------------------------------------------------------
 
-/// Aggregate all auth-related routes.
+/// User profile routes.
 ///
-/// Includes:
-/// - `POST /auth/register` (from users::routes) -- rate-limited (10/min per IP)
-/// - `POST /auth/login`    (from auth::routes)  -- rate-limited (10/min per IP)
-/// - `POST /auth/tokens`   (from auth::routes)  -- rate-limited (20/min per IP)
-/// - `GET  /auth/tokens`   (from auth::routes)
-/// - `DELETE /auth/tokens/{id}` (from auth::routes)
-/// - `GET  /users/me`      (from users::routes)
-/// - `PATCH /users/me`     (from users::routes)
-///
-/// Rate limiting is applied to `/auth/login` and `/auth/register` to prevent
-/// brute-force attacks and credential stuffing. Token creation is rate-limited
-/// at a higher threshold (20/min) since it requires authentication but should
-/// still be protected against abuse.
-///
-/// When `config.redis_url` is set, the rate limit layers use Redis as a shared
-/// backend for consistent rate limiting across multiple server instances.
-fn auth_routes(layers: &RateLimitLayers) -> Router<AppState> {
-    use crate::users::routes::register;
-    use axum::routing::post;
-
-    // Rate-limited routes: login and register (10/min per IP)
-    // These are the most sensitive endpoints for brute-force protection.
-    // Login is handled by auth::routes which supports username or email,
-    // delegates to the auth service layer, and uses the centralized token module.
-    let rate_limited_auth = Router::new()
-        .route("/auth/register", post(register))
-        .merge(crate::auth::routes::auth_login_routes())
-        .layer(layers.auth.clone());
-
-    // Rate-limited token creation (20/min per IP)
-    // Token creation requires authentication, so brute-force is less of a
-    // concern, but we still rate-limit to prevent abuse.
-    let rate_limited_tokens = Router::new()
-        .route(
-            "/auth/tokens",
-            post(crate::auth::routes::create_token_handler_fn()),
-        )
-        .layer(layers.token.clone());
-
-    // Non-rate-limited auth routes (token listing and revocation)
-    // These require authentication and are read/delete operations.
-    let other_auth = Router::new().merge(crate::auth::routes::auth_token_read_routes());
-
-    // User profile routes (GET/PATCH /users/me)
-    let user_profile = Router::new().merge(crate::users::routes::users_profile_routes());
-
+/// With zOS JWT auth, login/register/PAT endpoints are removed.
+/// User identity comes from the JWT token.
+fn auth_routes(_layers: &RateLimitLayers) -> Router<AppState> {
     Router::new()
-        .merge(rate_limited_auth)
-        .merge(rate_limited_tokens)
-        .merge(other_auth)
-        .merge(user_profile)
 }
 
 /// Aggregate all repository-related routes under `/repos/...`.

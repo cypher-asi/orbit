@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::auth::middleware::RequireAuth;
-use crate::auth::AdminUser;
+use crate::auth::middleware::InternalAuth;
 use crate::errors::ApiError;
 use crate::permissions::models::Permission;
 use crate::permissions::service as permissions_service;
@@ -66,7 +66,7 @@ pub struct OwnerRepoPath {
 /// until, limit, offset. Returns a paginated list of audit events ordered by
 /// `created_at DESC`.
 async fn admin_list_events(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Query(params): Query<AdminEventsQuery>,
 ) -> Result<Json<Vec<AuditEvent>>, ApiError> {
@@ -86,7 +86,7 @@ async fn admin_list_events(
 
 /// GET /admin/events/{id} -- Get a single audit event by ID (admin only).
 async fn admin_get_event(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AuditEvent>, ApiError> {

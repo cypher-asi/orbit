@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::auth::AdminUser;
+use crate::auth::middleware::InternalAuth;
 use crate::errors::ApiError;
 use crate::events;
 use crate::events::models::NewAuditEvent;
@@ -67,7 +67,7 @@ pub struct AdminRepoDetailResponse {
 
 /// GET /admin/users - List all users with pagination and optional username search.
 async fn list_users(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Query(params): Query<AdminListUsersQuery>,
 ) -> Result<Json<Vec<UserResponse>>, ApiError> {
@@ -84,7 +84,7 @@ async fn list_users(
 
 /// GET /admin/users/{id} - Get user details.
 async fn get_user(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<UserResponse>, ApiError> {
@@ -97,7 +97,7 @@ async fn get_user(
 
 /// POST /admin/users/{id}/disable - Disable a user account.
 async fn disable_user(
-    admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
@@ -107,7 +107,7 @@ async fn disable_user(
     events::emit(
         &state.db,
         NewAuditEvent {
-            actor_id: Some(admin.0.id),
+            actor_id: None,
             event_type: "admin.user_disabled".to_string(),
             repo_id: None,
             target_id: Some(id),
@@ -121,7 +121,7 @@ async fn disable_user(
 
 /// POST /admin/users/{id}/enable - Enable a user account.
 async fn enable_user(
-    admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
@@ -131,7 +131,7 @@ async fn enable_user(
     events::emit(
         &state.db,
         NewAuditEvent {
-            actor_id: Some(admin.0.id),
+            actor_id: None,
             event_type: "admin.user_enabled".to_string(),
             repo_id: None,
             target_id: Some(id),
@@ -149,7 +149,7 @@ async fn enable_user(
 
 /// GET /admin/repos - List all repos with pagination and optional search.
 async fn list_repos(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Query(params): Query<AdminListReposQuery>,
 ) -> Result<Json<Vec<RepoResponse>>, ApiError> {
@@ -165,7 +165,7 @@ async fn list_repos(
 
 /// GET /admin/repos/{id} - Get repo details + storage status.
 async fn get_repo(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AdminRepoDetailResponse>, ApiError> {
@@ -184,17 +184,17 @@ async fn get_repo(
 
 /// POST /admin/repos/{id}/archive - Archive a repository.
 async fn archive_repo(
-    admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    repo_service::archive_repo(&state.db, id, admin.0.id).await?;
+    repo_service::archive_repo(&state.db, id, Uuid::nil()).await?;
 
     // Emit audit event
     events::emit(
         &state.db,
         NewAuditEvent {
-            actor_id: Some(admin.0.id),
+            actor_id: None,
             event_type: "admin.repo_archived".to_string(),
             repo_id: Some(id),
             target_id: None,
@@ -212,7 +212,7 @@ async fn archive_repo(
 
 /// GET /admin/jobs - List jobs with optional status filter.
 async fn list_jobs(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Query(params): Query<AdminListJobsQuery>,
 ) -> Result<Json<Vec<Job>>, ApiError> {
@@ -226,7 +226,7 @@ async fn list_jobs(
 
 /// GET /admin/jobs/failed - List failed jobs.
 async fn list_failed_jobs(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Query(params): Query<AdminListJobsQuery>,
 ) -> Result<Json<Vec<Job>>, ApiError> {
@@ -238,7 +238,7 @@ async fn list_failed_jobs(
 
 /// POST /admin/jobs/{id}/retry - Retry a failed job.
 async fn retry_job(
-    _admin: AdminUser,
+    _admin: InternalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {

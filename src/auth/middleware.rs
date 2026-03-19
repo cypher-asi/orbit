@@ -7,25 +7,21 @@ use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::errors::ApiError;
 
-/// Lightweight struct carrying the essential fields of an authenticated user.
+/// Lightweight struct carrying the authenticated user's identity.
 ///
-/// Downstream handlers receive this instead of the full `User` model so that
-/// sensitive fields (password hash, timestamps, etc.) are never accidentally
-/// leaked.
+/// With zOS JWT auth, only the user UUID is available from the token.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
     pub id: Uuid,
-    pub username: String,
-    pub email: String,
-    pub is_admin: bool,
 }
 
 /// Extract a raw token from the `Authorization` header.
 ///
 /// Supports two schemes:
-/// - `Bearer <token>` -- the token is used directly.
+/// - `Bearer <token>` -- the token is used directly (API calls).
 /// - `Basic <base64>` -- the base64 payload is decoded to `username:token`;
-///   only the token (password) portion is used, for Git HTTP compatibility.
+///   only the token (password) portion is used. For Git HTTP, the JWT is
+///   passed as the password.
 ///
 /// Returns `None` if there is no `Authorization` header.
 /// Returns `Err` if the header is present but malformed.
@@ -55,7 +51,7 @@ fn extract_raw_token(parts: &Parts) -> Result<Option<String>, ApiError> {
         let decoded = String::from_utf8(decoded_bytes)
             .map_err(|_| ApiError::Unauthorized("invalid basic auth encoding".to_string()))?;
 
-        // Format: username:token -- we only care about the token part.
+        // Format: username:token -- the token (password) is the JWT.
         let token_part = match decoded.split_once(':') {
             Some((_username, token)) => token,
             None => {
@@ -77,37 +73,34 @@ fn extract_raw_token(parts: &Parts) -> Result<Option<String>, ApiError> {
     ))
 }
 
-/// Verify the raw token against the database and return an `AuthenticatedUser`
-/// if valid.
+/// Validate a JWT token and return an `AuthenticatedUser`.
 async fn resolve_user(state: &AppState, raw_token: &str) -> Result<AuthenticatedUser, ApiError> {
-    let user = super::service::verify_token(&state.db, raw_token)
-        .await?
-        .ok_or_else(|| ApiError::Unauthorized("invalid or expired token".to_string()))?;
+    let claims = state
+        .token_validator
+        .validate(raw_token)
+        .await
+        .map_err(ApiError::Unauthorized)?;
 
-    Ok(AuthenticatedUser {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        is_admin: user.is_admin,
-    })
+    let user_id_str = claims
+        .user_id()
+        .ok_or_else(|| ApiError::Unauthorized("token missing user ID".to_string()))?;
+
+    let id = user_id_str
+        .parse::<Uuid>()
+        .map_err(|_| ApiError::Unauthorized("invalid user ID in token".to_string()))?;
+
+    Ok(AuthenticatedUser { id })
 }
 
 // ---------------------------------------------------------------------------
 // RequireAuth extractor
 // ---------------------------------------------------------------------------
 
-/// Axum extractor that **requires** a valid authentication token.
+/// Axum extractor that **requires** a valid JWT token.
 ///
-/// Reads the `Authorization` header (Bearer or Basic), verifies the token,
+/// Reads the `Authorization` header (Bearer or Basic), validates the JWT,
 /// and resolves to an `AuthenticatedUser`. Returns `401 Unauthorized` if the
-/// token is missing, invalid, expired, revoked, or the user is disabled.
-///
-/// # Example
-/// ```ignore
-/// async fn handler(RequireAuth(user): RequireAuth) -> impl IntoResponse {
-///     format!("Hello, {}!", user.username)
-/// }
-/// ```
+/// token is missing, invalid, or the user ID cannot be extracted.
 pub struct RequireAuth(pub AuthenticatedUser);
 
 impl FromRequestParts<AppState> for RequireAuth {
@@ -134,18 +127,7 @@ impl FromRequestParts<AppState> for RequireAuth {
 /// If no `Authorization` header is present the inner value is `None`,
 /// allowing unauthenticated access (useful for public repository reads).
 /// If a header *is* present but the token is invalid, this still returns
-/// `401 Unauthorized` so that callers with bad credentials are not silently
-/// treated as anonymous.
-///
-/// # Example
-/// ```ignore
-/// async fn handler(OptionalAuth(user): OptionalAuth) -> impl IntoResponse {
-///     match user {
-///         Some(u) => format!("Hello, {}!", u.username),
-///         None => "Hello, anonymous!".to_string(),
-///     }
-/// }
-/// ```
+/// `401 Unauthorized`.
 pub struct OptionalAuth(pub Option<AuthenticatedUser>);
 
 impl FromRequestParts<AppState> for OptionalAuth {
@@ -162,6 +144,34 @@ impl FromRequestParts<AppState> for OptionalAuth {
 
         let user = resolve_user(state, &raw_token).await?;
         Ok(OptionalAuth(Some(user)))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// InternalAuth extractor
+// ---------------------------------------------------------------------------
+
+/// Axum extractor for service-to-service auth via `X-Internal-Token` header.
+pub struct InternalAuth;
+
+impl FromRequestParts<AppState> for InternalAuth {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get("x-internal-token")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| ApiError::Unauthorized("missing internal token".to_string()))?;
+
+        if token != state.config.internal_service_token {
+            return Err(ApiError::Unauthorized("invalid internal token".to_string()));
+        }
+
+        Ok(InternalAuth)
     }
 }
 
@@ -186,12 +196,11 @@ mod tests {
 
     #[test]
     fn extract_basic_token() {
-        // "user:the-pat" base64 encoded
-        let encoded = STANDARD.encode("user:the-pat");
+        let encoded = STANDARD.encode("user:the-jwt");
         let header_val = format!("Basic {}", encoded);
         let parts = make_parts(Some(&header_val));
         let token = extract_raw_token(&parts).unwrap();
-        assert_eq!(token, Some("the-pat".to_string()));
+        assert_eq!(token, Some("the-jwt".to_string()));
     }
 
     #[test]
@@ -231,17 +240,5 @@ mod tests {
         let parts = make_parts(Some("Digest abc123"));
         let result = extract_raw_token(&parts);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn authenticated_user_is_serializable() {
-        let user = AuthenticatedUser {
-            id: Uuid::nil(),
-            username: "alice".to_string(),
-            email: "alice@example.com".to_string(),
-            is_admin: false,
-        };
-        let json = serde_json::to_string(&user).unwrap();
-        assert!(json.contains("alice"));
     }
 }

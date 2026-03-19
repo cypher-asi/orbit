@@ -38,6 +38,14 @@ pub struct Config {
     /// When set, the discovery endpoint uses this for `base_url` and `git_url_prefix`.
     /// When unset, falls back to `http://{server_host}:{server_port}` for local development.
     pub public_base_url: Option<String>,
+    /// Auth0 domain for JWKS key fetching (e.g. `auth.zero.tech`).
+    pub auth0_domain: String,
+    /// Auth0 audience for RS256 token validation.
+    pub auth0_audience: String,
+    /// Shared secret for HS256 token validation (same as aura-network/storage).
+    pub auth_cookie_secret: String,
+    /// Token for service-to-service auth (X-Internal-Token header).
+    pub internal_service_token: String,
 }
 
 impl Config {
@@ -79,6 +87,15 @@ impl Config {
 
         let public_base_url = env::var("PUBLIC_BASE_URL").ok().filter(|s| !s.is_empty());
 
+        let auth0_domain =
+            env::var("AUTH0_DOMAIN").context("AUTH0_DOMAIN must be set")?;
+        let auth0_audience =
+            env::var("AUTH0_AUDIENCE").context("AUTH0_AUDIENCE must be set")?;
+        let auth_cookie_secret =
+            env::var("AUTH_COOKIE_SECRET").context("AUTH_COOKIE_SECRET must be set")?;
+        let internal_service_token =
+            env::var("INTERNAL_SERVICE_TOKEN").context("INTERNAL_SERVICE_TOKEN must be set")?;
+
         Ok(Config {
             database_url,
             server_host,
@@ -88,6 +105,10 @@ impl Config {
             cors_allowed_origins,
             redis_url,
             public_base_url,
+            auth0_domain,
+            auth0_audience,
+            auth_cookie_secret,
+            internal_service_token,
         })
     }
 

@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::app_state::AppState;
-use crate::auth::AuthUser;
+use crate::auth::middleware::RequireAuth;
 use crate::errors::ApiError;
 use crate::permissions::models::{Permission, RepoMember, Role};
 use crate::permissions::service;
@@ -90,7 +90,7 @@ async fn resolve_repo_for_admin(
 ///
 /// List all collaborators of a repository. Requires Admin (owner) permission.
 pub async fn list_collaborators(
-    AuthUser(user): AuthUser,
+    RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
     Path(path): Path<RepoPath>,
 ) -> Result<Json<Vec<RepoMember>>, ApiError> {
@@ -105,7 +105,7 @@ pub async fn list_collaborators(
 /// Add or update a collaborator. Requires Admin (owner) permission.
 /// The request body must contain a `role` field.
 pub async fn add_or_update_collaborator(
-    AuthUser(user): AuthUser,
+    RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
     Path(path): Path<RepoCollabPath>,
     Json(body): Json<AddOrUpdateCollaboratorRequest>,
@@ -142,7 +142,7 @@ pub async fn add_or_update_collaborator(
 /// Remove a collaborator. Requires Admin (owner) permission.
 /// Cannot remove the repository owner.
 pub async fn remove_collaborator(
-    AuthUser(user): AuthUser,
+    RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
     Path(path): Path<RepoCollabPath>,
 ) -> Result<StatusCode, ApiError> {
