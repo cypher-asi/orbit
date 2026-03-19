@@ -1,3 +1,4 @@
+pub mod discovery;
 pub mod health;
 pub mod pagination;
 pub mod rate_limit;

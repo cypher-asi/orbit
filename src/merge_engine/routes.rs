@@ -4,6 +4,7 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::auth::middleware::RequireAuth;
@@ -22,12 +23,13 @@ use super::service as merge_service;
 // Path extractors
 // ---------------------------------------------------------------------------
 
-/// Path parameters for `/repos/{owner}/{repo}/pulls/{number}/merge`.
+/// Path parameters for `/repos/{owner}/{repo}/pulls/{id}/merge`.
+/// `id` is the pull request's UUID.
 #[derive(Debug, Deserialize)]
 pub struct MergePrPath {
     pub owner: String,
     pub repo: String,
-    pub number: i32,
+    pub id: Uuid,
 }
 
 // ---------------------------------------------------------------------------
@@ -63,10 +65,10 @@ async fn resolve_repo(
 // Handler
 // ---------------------------------------------------------------------------
 
-/// POST /repos/{owner}/{repo}/pulls/{number}/merge -- Merge a PR (write access required).
+/// POST /repos/{owner}/{repo}/pulls/{id}/merge -- Merge a PR (write access required).
 ///
 /// Accepts a JSON body with `strategy` and optional `commit_message`.
-/// Resolves the repository and PR, checks write permission, then delegates
+/// Resolves the repository and PR by UUID, checks write permission, then delegates
 /// to `merge_engine::service::merge_pr`.
 ///
 /// ## Responses
@@ -94,12 +96,19 @@ async fn merge_pr(
     )
     .await?;
 
+    // Verify the PR belongs to this repo (404 if not).
+    let pr = crate::pull_requests::service::get_pr_by_id(&state.db, path.id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
+    if pr.repo_id != repo.id {
+        return Err(ApiError::NotFound("pull request not found".to_string()));
+    }
+
     let sc = storage_config(&state);
     let result = merge_service::merge_pr(
         &state.db,
         &sc,
-        repo.id,
-        path.number,
+        path.id,
         body.strategy,
         user.id,
         body.commit_message.clone(),
@@ -120,9 +129,9 @@ async fn merge_pr(
                 user.id,
                 "merge.failed",
                 Some(repo.id),
-                None,
+                Some(path.id),
                 Some(serde_json::json!({
-                    "pr_number": path.number,
+                    "pr_id": path.id,
                     "strategy": body.strategy.as_str(),
                     "error": error_message,
                 })),
@@ -142,10 +151,10 @@ async fn merge_pr(
 /// Build the Router for merge engine endpoints.
 ///
 /// Mounts:
-/// - `POST /repos/{owner}/{repo}/pulls/{number}/merge` -- merge a PR
+/// - `POST /repos/{owner}/{repo}/pulls/{id}/merge` -- merge a PR (id = UUID)
 pub fn merge_engine_routes() -> Router<AppState> {
     Router::new().route(
-        "/repos/{owner}/{repo}/pulls/{number}/merge",
+        "/repos/{owner}/{repo}/pulls/{id}/merge",
         post(merge_pr),
     )
 }

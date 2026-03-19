@@ -148,6 +148,21 @@ pub async fn get_pr(
     Ok(pr)
 }
 
+/// Get a single pull request by its UUID id.
+pub async fn get_pr_by_id(
+    pool: &PgPool,
+    id: Uuid,
+) -> Result<Option<PullRequest>, ApiError> {
+    let pr = sqlx::query_as::<_, PullRequest>(
+        r#"SELECT * FROM pull_requests WHERE id = $1"#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(pr)
+}
+
 /// List pull requests for a repository with optional filtering and pagination.
 pub async fn list_prs(
     pool: &PgPool,

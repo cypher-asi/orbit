@@ -32,12 +32,13 @@ pub struct OwnerRepoPath {
     pub repo: String,
 }
 
-/// Path parameters for `/repos/{owner}/{repo}/pulls/{number}`.
+/// Path parameters for `/repos/{owner}/{repo}/pulls/{id}`.
+/// `id` is the pull request's UUID.
 #[derive(Debug, Deserialize)]
 pub struct OwnerRepoPrPath {
     pub owner: String,
     pub repo: String,
-    pub number: i32,
+    pub id: Uuid,
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ pub struct CreatePrRequest {
     pub description: Option<String>,
 }
 
-/// JSON body for `PATCH /repos/{owner}/{repo}/pulls/{number}`.
+/// JSON body for `PATCH /repos/{owner}/{repo}/pulls/{id}`.
 #[derive(Debug, Deserialize)]
 pub struct UpdatePrRequest {
     pub title: Option<String>,
@@ -100,6 +101,22 @@ async fn resolve_repo(
         .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
 
     Ok(repo)
+}
+
+/// Resolve a pull request by UUID and verify it belongs to the given repo.
+/// Returns 404 if the PR does not exist or belongs to another repo.
+async fn resolve_pr_in_repo(
+    pool: &sqlx::PgPool,
+    pr_id: Uuid,
+    repo_id: Uuid,
+) -> Result<PullRequest, ApiError> {
+    let pr = pr_service::get_pr_by_id(pool, pr_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
+    if pr.repo_id != repo_id {
+        return Err(ApiError::NotFound("pull request not found".to_string()));
+    }
+    Ok(pr)
 }
 
 /// Check that the current user is either the PR author or has write access to the repo.
@@ -207,7 +224,7 @@ async fn list_prs(
     Ok(Json(prs))
 }
 
-/// GET /repos/{owner}/{repo}/pulls/{number} -- Get PR details (optional auth).
+/// GET /repos/{owner}/{repo}/pulls/{id} -- Get PR details (optional auth).
 async fn get_pr(
     OptionalAuth(user): OptionalAuth,
     State(state): State<AppState>,
@@ -225,16 +242,12 @@ async fn get_pr(
     )
     .await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     Ok(Json(pr))
 }
 
-/// PATCH /repos/{owner}/{repo}/pulls/{number} -- Update PR title/description (author or write access).
+/// PATCH /repos/{owner}/{repo}/pulls/{id} -- Update PR title/description (author or write access).
 async fn update_pr(
     RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
@@ -243,11 +256,7 @@ async fn update_pr(
 ) -> Result<Json<PullRequest>, ApiError> {
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     // Author or write access required.
     check_author_or_write(&state, user.id, repo.id, pr.author_id).await?;
@@ -262,7 +271,7 @@ async fn update_pr(
     Ok(Json(updated))
 }
 
-/// POST /repos/{owner}/{repo}/pulls/{number}/close -- Close a PR (author or write access).
+/// POST /repos/{owner}/{repo}/pulls/{id}/close -- Close a PR (author or write access).
 async fn close_pr(
     RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
@@ -270,11 +279,7 @@ async fn close_pr(
 ) -> Result<Json<PullRequest>, ApiError> {
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     // Author or write access required.
     check_author_or_write(&state, user.id, repo.id, pr.author_id).await?;
@@ -284,7 +289,7 @@ async fn close_pr(
     Ok(Json(closed))
 }
 
-/// POST /repos/{owner}/{repo}/pulls/{number}/reopen -- Reopen a PR (author or write access).
+/// POST /repos/{owner}/{repo}/pulls/{id}/reopen -- Reopen a PR (author or write access).
 async fn reopen_pr(
     RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
@@ -292,11 +297,7 @@ async fn reopen_pr(
 ) -> Result<Json<PullRequest>, ApiError> {
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     // Author or write access required.
     check_author_or_write(&state, user.id, repo.id, pr.author_id).await?;
@@ -307,7 +308,7 @@ async fn reopen_pr(
     Ok(Json(reopened))
 }
 
-/// GET /repos/{owner}/{repo}/pulls/{number}/diff -- Get PR diff (optional auth).
+/// GET /repos/{owner}/{repo}/pulls/{id}/diff -- Get PR diff (optional auth).
 async fn get_pr_diff(
     OptionalAuth(user): OptionalAuth,
     State(state): State<AppState>,
@@ -325,11 +326,7 @@ async fn get_pr_diff(
     )
     .await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     let diff = pr_service::get_pr_diff(
         &storage_config(&state),
@@ -342,7 +339,7 @@ async fn get_pr_diff(
     Ok(diff)
 }
 
-/// GET /repos/{owner}/{repo}/pulls/{number}/mergeability -- Check mergeability (optional auth).
+/// GET /repos/{owner}/{repo}/pulls/{id}/mergeability -- Check mergeability (optional auth).
 async fn check_mergeability(
     OptionalAuth(user): OptionalAuth,
     State(state): State<AppState>,
@@ -360,11 +357,7 @@ async fn check_mergeability(
     )
     .await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     let state_val = pr_service::check_mergeability(
         &storage_config(&state),
@@ -377,7 +370,7 @@ async fn check_mergeability(
     Ok(Json(MergeabilityResponse { mergeability: state_val }))
 }
 
-/// GET /repos/{owner}/{repo}/pulls/{number}/conflicts -- Check merge conflicts (optional auth).
+/// GET /repos/{owner}/{repo}/pulls/{id}/conflicts -- Check merge conflicts (optional auth).
 ///
 /// Preview merge conflicts between the PR's source and target branches
 /// without performing the actual merge. Returns a `ConflictCheck` indicating
@@ -399,11 +392,7 @@ async fn check_conflicts(
     )
     .await?;
 
-    let pr = pr_service::get_pr(&state.db, repo.id, path.number)
-        .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("pull request #{} not found", path.number))
-        })?;
+    let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     let sc = storage_config(&state);
     let conflict_check = merge_service::check_conflicts(
@@ -436,16 +425,16 @@ pub struct MergeabilityResponse {
 /// Build the Router for pull request endpoints.
 ///
 /// Mounts:
-/// - `POST   /repos/{owner}/{repo}/pulls`                       -- create PR
-/// - `GET    /repos/{owner}/{repo}/pulls`                        -- list PRs
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}`               -- get PR details
-/// - `PATCH  /repos/{owner}/{repo}/pulls/{number}`               -- update PR
-/// - `POST   /repos/{owner}/{repo}/pulls/{number}/close`         -- close PR
-/// - `POST   /repos/{owner}/{repo}/pulls/{number}/reopen`        -- reopen PR
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}/diff`          -- get PR diff
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}/mergeability`  -- check mergeability
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}/conflicts`     -- check merge conflicts
-/// - `POST   /repos/{owner}/{repo}/pulls/{number}/merge`         -- merge PR
+/// - `POST   /repos/{owner}/{repo}/pulls`                  -- create PR
+/// - `GET    /repos/{owner}/{repo}/pulls`                  -- list PRs
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}`             -- get PR details (id = UUID)
+/// - `PATCH  /repos/{owner}/{repo}/pulls/{id}`              -- update PR
+/// - `POST   /repos/{owner}/{repo}/pulls/{id}/close`       -- close PR
+/// - `POST   /repos/{owner}/{repo}/pulls/{id}/reopen`      -- reopen PR
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}/diff`        -- get PR diff
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}/mergeability` -- check mergeability
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}/conflicts`   -- check merge conflicts
+/// - `POST   /repos/{owner}/{repo}/pulls/{id}/merge`       -- merge PR
 pub fn pull_request_routes() -> Router<AppState> {
     Router::new()
         .route(
@@ -453,30 +442,30 @@ pub fn pull_request_routes() -> Router<AppState> {
             post(create_pr).get(list_prs),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}",
+            "/repos/{owner}/{repo}/pulls/{id}",
             get(get_pr).patch(update_pr),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/close",
+            "/repos/{owner}/{repo}/pulls/{id}/close",
             post(close_pr),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/reopen",
+            "/repos/{owner}/{repo}/pulls/{id}/reopen",
             post(reopen_pr),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/diff",
+            "/repos/{owner}/{repo}/pulls/{id}/diff",
             get(get_pr_diff),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/mergeability",
+            "/repos/{owner}/{repo}/pulls/{id}/mergeability",
             get(check_mergeability),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/conflicts",
+            "/repos/{owner}/{repo}/pulls/{id}/conflicts",
             get(check_conflicts),
         )
-        // NOTE: POST /repos/{owner}/{repo}/pulls/{number}/merge is in merge_engine::routes
+        // NOTE: POST /repos/{owner}/{repo}/pulls/{id}/merge is in merge_engine::routes
 }
 
 /// Return a method router for the create-PR handler.
@@ -493,14 +482,14 @@ pub fn create_pr_handler() -> axum::routing::MethodRouter<AppState> {
 /// non-rate-limited read/update operations.
 ///
 /// Mounts:
-/// - `GET    /repos/{owner}/{repo}/pulls`                        -- list PRs
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}`               -- get PR details
-/// - `PATCH  /repos/{owner}/{repo}/pulls/{number}`               -- update PR
-/// - `POST   /repos/{owner}/{repo}/pulls/{number}/close`         -- close PR
-/// - `POST   /repos/{owner}/{repo}/pulls/{number}/reopen`        -- reopen PR
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}/diff`          -- get PR diff
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}/mergeability`  -- check mergeability
-/// - `GET    /repos/{owner}/{repo}/pulls/{number}/conflicts`     -- check merge conflicts
+/// - `GET    /repos/{owner}/{repo}/pulls`                  -- list PRs
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}`             -- get PR details (id = UUID)
+/// - `PATCH  /repos/{owner}/{repo}/pulls/{id}`             -- update PR
+/// - `POST   /repos/{owner}/{repo}/pulls/{id}/close`       -- close PR
+/// - `POST   /repos/{owner}/{repo}/pulls/{id}/reopen`      -- reopen PR
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}/diff`        -- get PR diff
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}/mergeability` -- check mergeability
+/// - `GET    /repos/{owner}/{repo}/pulls/{id}/conflicts`   -- check merge conflicts
 pub fn pull_request_routes_without_create() -> Router<AppState> {
     Router::new()
         .route(
@@ -508,27 +497,27 @@ pub fn pull_request_routes_without_create() -> Router<AppState> {
             get(list_prs),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}",
+            "/repos/{owner}/{repo}/pulls/{id}",
             get(get_pr).patch(update_pr),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/close",
+            "/repos/{owner}/{repo}/pulls/{id}/close",
             post(close_pr),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/reopen",
+            "/repos/{owner}/{repo}/pulls/{id}/reopen",
             post(reopen_pr),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/diff",
+            "/repos/{owner}/{repo}/pulls/{id}/diff",
             get(get_pr_diff),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/mergeability",
+            "/repos/{owner}/{repo}/pulls/{id}/mergeability",
             get(check_mergeability),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/conflicts",
+            "/repos/{owner}/{repo}/pulls/{id}/conflicts",
             get(check_conflicts),
         )
 }

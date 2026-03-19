@@ -166,8 +166,7 @@ fn worktree_path(bare_repo_path: &Path) -> PathBuf {
 pub async fn merge_pr(
     pool: &PgPool,
     storage: &StorageConfig,
-    repo_id: Uuid,
-    pr_number: i32,
+    pr_id: Uuid,
     strategy: MergeStrategy,
     actor_id: Uuid,
     commit_message: Option<String>,
@@ -176,20 +175,19 @@ pub async fn merge_pr(
     // Step 1: Load PR and validate status
     // -----------------------------------------------------------------------
     let pr = sqlx::query_as::<_, PullRequest>(
-        r#"SELECT * FROM pull_requests WHERE repo_id = $1 AND number = $2"#,
+        r#"SELECT * FROM pull_requests WHERE id = $1"#,
     )
-    .bind(repo_id)
-    .bind(pr_number)
+    .bind(pr_id)
     .fetch_optional(pool)
     .await?
-    .ok_or_else(|| {
-        ApiError::NotFound(format!("pull request #{} not found", pr_number))
-    })?;
+    .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
+
+    let repo_id = pr.repo_id;
 
     if pr.status != PrStatus::Open {
         return Err(ApiError::Unprocessable(format!(
-            "pull request #{} is not open (status: {})",
-            pr_number, pr.status
+            "pull request is not open (status: {})",
+            pr.status
         )));
     }
 

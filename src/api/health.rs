@@ -147,6 +147,7 @@ mod tests {
             log_level: String::new(),
             cors_allowed_origins: vec![],
             redis_url: None,
+            public_base_url: None,
         }
     }
 
@@ -159,6 +160,7 @@ mod tests {
             log_level: String::new(),
             cors_allowed_origins: vec![],
             redis_url: Some(url.to_string()),
+            public_base_url: None,
         }
     }
 

@@ -8,6 +8,7 @@ use tower_http::{
 use crate::app_state::AppState;
 use crate::config::Config;
 
+use super::discovery::discovery;
 use super::health::health_check;
 use super::rate_limit::{
     admin_action_rate_limit_layer, admin_action_rate_limit_layer_redis, auth_rate_limit_layer,
@@ -158,7 +159,7 @@ fn repos_routes(layers: &RateLimitLayers) -> Router<AppState> {
             post(crate::pull_requests::routes::create_pr_handler()),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{number}/merge",
+            "/repos/{owner}/{repo}/pulls/{id}/merge",
             post(crate::merge_engine::routes::merge_pr_handler()),
         )
         .layer(layers.repo_write.clone());
@@ -176,6 +177,8 @@ fn repos_routes(layers: &RateLimitLayers) -> Router<AppState> {
         .merge(crate::branches::routes::branches_routes())
         // Commits & tree browsing: GET /repos/{owner}/{repo}/commits/...
         .merge(crate::commits::routes::commits_routes())
+        // Tags: GET /repos/{owner}/{repo}/tags
+        .merge(crate::tags::routes::tags_routes())
         // Pull requests (non-rate-limited parts): GET/PATCH, close, reopen, diff, mergeability
         .merge(crate::pull_requests::routes::pull_request_routes_without_create())
         // Merge engine (non-rate-limited parts -- the merge POST is above)
@@ -374,9 +377,21 @@ pub async fn build_router(state: AppState) -> Router {
     // Build rate limit layers at startup, using Redis when configured.
     let layers = RateLimitLayers::build(&state.config).await;
 
+    // Versioned API under /v1 (same REST routes as root, plus discovery at GET /v1 and GET /v1/api).
+    let v1_router = Router::new()
+        .route("/", get(discovery))
+        .route("/api", get(discovery))
+        .merge(auth_routes(&layers))
+        .merge(repos_routes(&layers))
+        .merge(users_routes())
+        .merge(admin_routes(&layers));
+
     let app = Router::new()
         // Health check at the root level
         .route("/health", get(health_check))
+        // Discovery (no auth): GET / and GET /api
+        .route("/", get(discovery))
+        .route("/api", get(discovery))
         // Auth routes (register, login, PAT CRUD, /users/me)
         .merge(auth_routes(&layers))
         // Repository routes (CRUD, branches, commits, PRs, merge, collaborators, events)
@@ -385,6 +400,8 @@ pub async fn build_router(state: AppState) -> Router {
         .merge(users_routes())
         // Admin routes (user/repo/job management, audit events)
         .merge(admin_routes(&layers))
+        // Versioned API: same REST under /v1 (e.g. /v1/repos, /v1/auth/login)
+        .nest("/v1", v1_router)
         // Git HTTP transport -- mounted at root; paths use `{repo}.git` suffix
         // so they don't conflict with `/repos/{owner}/{repo}/...` API routes
         .merge(git_http_routes(&layers));
@@ -421,6 +438,7 @@ mod tests {
             log_level: String::new(),
             cors_allowed_origins: vec![],
             redis_url: None,
+            public_base_url: None,
         };
         let _cors = build_cors_layer(&config);
     }
@@ -439,6 +457,7 @@ mod tests {
                 "https://app.example.com".to_string(),
             ],
             redis_url: None,
+            public_base_url: None,
         };
         let _cors = build_cors_layer(&config);
     }
@@ -456,6 +475,7 @@ mod tests {
                 "not a valid\norigin".to_string(),
             ],
             redis_url: None,
+            public_base_url: None,
         };
         let _cors = build_cors_layer(&config);
     }
@@ -472,6 +492,7 @@ mod tests {
             log_level: String::new(),
             cors_allowed_origins: vec![],
             redis_url: None,
+            public_base_url: None,
         };
         let layers = RateLimitLayers::build(&config).await;
         // Verify all layer fields are populated (they are -- this is a

@@ -31,6 +31,11 @@ pub struct Config {
     ///
     /// Example: `redis://127.0.0.1:6379`
     pub redis_url: Option<String>,
+    /// Optional public base URL for discovery and links (e.g. `https://orbit.example.com`).
+    ///
+    /// When set, the discovery endpoint uses this for `base_url` and `git_url_prefix`.
+    /// When unset, falls back to `http://{server_host}:{server_port}` for local development.
+    pub public_base_url: Option<String>,
 }
 
 impl Config {
@@ -70,6 +75,9 @@ impl Config {
 
         let redis_url = env::var("REDIS_URL").ok().filter(|s| !s.is_empty());
 
+        let public_base_url =
+            env::var("PUBLIC_BASE_URL").ok().filter(|s| !s.is_empty());
+
         Config {
             database_url,
             server_host,
@@ -78,7 +86,23 @@ impl Config {
             log_level,
             cors_allowed_origins,
             redis_url,
+            public_base_url,
         }
+    }
+
+    /// Base URL for the REST API and Git clone (with trailing slash removed).
+    /// Used by the discovery endpoint.
+    pub fn base_url(&self) -> String {
+        self.public_base_url
+            .clone()
+            .unwrap_or_else(|| format!("http://{}:{}", self.server_host, self.server_port))
+            .trim_end_matches('/')
+            .to_string()
+    }
+
+    /// Prefix for Git clone URLs: `{git_url_prefix}{owner}/{repo}.git`.
+    pub fn git_url_prefix(&self) -> String {
+        format!("{}/", self.base_url())
     }
 }
 
@@ -102,6 +126,7 @@ mod tests {
             env::remove_var("LOG_LEVEL");
             env::remove_var("CORS_ALLOWED_ORIGINS");
             env::remove_var("REDIS_URL");
+            env::remove_var("PUBLIC_BASE_URL");
         }
 
         let config = Config::load();
@@ -113,11 +138,13 @@ mod tests {
         assert_eq!(config.log_level, "info");
         assert!(config.cors_allowed_origins.is_empty());
         assert!(config.redis_url.is_none());
+        assert!(config.public_base_url.is_none());
     }
 
     #[test]
     fn load_with_custom_values() {
-        // SAFETY: See note in load_with_defaults.
+        // SAFETY: See note in load_with_defaults. Set all vars again immediately
+        // before load() to reduce the window for parallel tests overwriting them.
         unsafe {
             env::set_var("DATABASE_URL", "postgres://db:5432/orbit");
             env::set_var("SERVER_HOST", "127.0.0.1");
@@ -125,8 +152,12 @@ mod tests {
             env::set_var("GIT_STORAGE_ROOT", "/data/repos");
             env::set_var("LOG_LEVEL", "debug");
             env::set_var("CORS_ALLOWED_ORIGINS", "https://example.com, https://app.example.com");
+            env::remove_var("PUBLIC_BASE_URL");
         }
 
+        unsafe {
+            env::set_var("DATABASE_URL", "postgres://db:5432/orbit");
+        }
         let config = Config::load();
 
         assert_eq!(config.database_url, "postgres://db:5432/orbit");

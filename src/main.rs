@@ -15,6 +15,7 @@ mod permissions;
 mod pull_requests;
 mod repos;
 mod storage;
+mod tags;
 mod users;
 
 use std::fs;
