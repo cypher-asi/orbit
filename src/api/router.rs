@@ -325,7 +325,7 @@ fn apply_middleware(
 /// Applied to every request:
 /// 1. Request ID generation (`x-request-id` header)
 /// 2. Request tracing (method, URI, status, latency)
-/// 3. CORS (configurable allowed origins; permissive when `CORS_ALLOWED_ORIGINS` is unset)
+/// 3. CORS (configurable allowed origins; permissive when `CORS_ORIGINS` is unset)
 /// 4. Request ID propagation to response
 ///
 /// ## Rate Limiting

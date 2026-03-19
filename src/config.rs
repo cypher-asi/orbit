@@ -20,7 +20,7 @@ pub struct Config {
     /// Comma-separated list of allowed CORS origins.
     ///
     /// When empty (the default), any origin is allowed (permissive /
-    /// development mode). In production, set `CORS_ALLOWED_ORIGINS` to a
+    /// development mode). In production, set `CORS_ORIGINS` to a
     /// comma-separated list of origins, e.g.
     /// `https://example.com,https://app.example.com`.
     pub cors_allowed_origins: Vec<String>,
@@ -76,7 +76,7 @@ impl Config {
 
         let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
 
-        let cors_allowed_origins: Vec<String> = env::var("CORS_ALLOWED_ORIGINS")
+        let cors_allowed_origins: Vec<String> = env::var("CORS_ORIGINS")
             .unwrap_or_default()
             .split(',')
             .map(|s| s.trim().to_string())
@@ -151,7 +151,7 @@ mod tests {
             env::remove_var("SERVER_HOST");
             env::remove_var("SERVER_PORT");
             env::remove_var("LOG_LEVEL");
-            env::remove_var("CORS_ALLOWED_ORIGINS");
+            env::remove_var("CORS_ORIGINS");
             env::remove_var("REDIS_URL");
             env::remove_var("PUBLIC_BASE_URL");
         }
@@ -184,7 +184,7 @@ mod tests {
             env::set_var("GIT_STORAGE_ROOT", "/data/repos");
             env::set_var("LOG_LEVEL", "debug");
             env::set_var(
-                "CORS_ALLOWED_ORIGINS",
+                "CORS_ORIGINS",
                 "https://example.com, https://app.example.com",
             );
             env::remove_var("PUBLIC_BASE_URL");
