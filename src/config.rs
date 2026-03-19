@@ -142,6 +142,10 @@ mod tests {
             // Set required variables
             env::set_var("DATABASE_URL", "postgres://localhost/orbit_test");
             env::set_var("GIT_STORAGE_ROOT", "/tmp/orbit_repos");
+            env::set_var("AUTH0_DOMAIN", "test.auth0.com");
+            env::set_var("AUTH0_AUDIENCE", "orbit-test");
+            env::set_var("AUTH_COOKIE_SECRET", "test-secret");
+            env::set_var("INTERNAL_SERVICE_TOKEN", "test-token");
 
             // Remove optional variables so defaults kick in
             env::remove_var("SERVER_HOST");
@@ -172,6 +176,10 @@ mod tests {
         unsafe {
             env::set_var("DATABASE_URL", "postgres://db:5432/orbit");
             env::set_var("SERVER_HOST", "127.0.0.1");
+            env::set_var("AUTH0_DOMAIN", "test.auth0.com");
+            env::set_var("AUTH0_AUDIENCE", "orbit-test");
+            env::set_var("AUTH_COOKIE_SECRET", "test-secret");
+            env::set_var("INTERNAL_SERVICE_TOKEN", "test-token");
             env::set_var("SERVER_PORT", "8080");
             env::set_var("GIT_STORAGE_ROOT", "/data/repos");
             env::set_var("LOG_LEVEL", "debug");

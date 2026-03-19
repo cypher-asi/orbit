@@ -408,6 +408,10 @@ mod tests {
             cors_allowed_origins: vec![],
             redis_url: None,
             public_base_url: None,
+            auth0_domain: String::new(),
+            auth0_audience: String::new(),
+            auth_cookie_secret: String::new(),
+            internal_service_token: String::new(),
         };
         let header = REQUEST_ID_HEADER.parse().unwrap();
         let _cors = build_cors_layer(&config, &header).unwrap();
@@ -428,6 +432,10 @@ mod tests {
             ],
             redis_url: None,
             public_base_url: None,
+            auth0_domain: String::new(),
+            auth0_audience: String::new(),
+            auth_cookie_secret: String::new(),
+            internal_service_token: String::new(),
         };
         let header = REQUEST_ID_HEADER.parse().unwrap();
         let _cors = build_cors_layer(&config, &header).unwrap();
@@ -444,6 +452,10 @@ mod tests {
             cors_allowed_origins: vec!["not a valid\norigin".to_string()],
             redis_url: None,
             public_base_url: None,
+            auth0_domain: String::new(),
+            auth0_audience: String::new(),
+            auth_cookie_secret: String::new(),
+            internal_service_token: String::new(),
         };
         let header = REQUEST_ID_HEADER.parse().unwrap();
         assert!(build_cors_layer(&config, &header).is_err());
@@ -462,6 +474,10 @@ mod tests {
             cors_allowed_origins: vec![],
             redis_url: None,
             public_base_url: None,
+            auth0_domain: String::new(),
+            auth0_audience: String::new(),
+            auth_cookie_secret: String::new(),
+            internal_service_token: String::new(),
         };
         let layers = RateLimitLayers::build(&config)
             .await
