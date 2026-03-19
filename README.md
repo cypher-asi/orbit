@@ -1,30 +1,16 @@
 <h1 align="center">ORBIT</h1>
 
 <p align="center">
-  A superfast git service built for machines.
-</p>
-
-<p align="center">
-  <a href="#overview">Overview</a> · <a href="#quick-start">Quick Start</a> · <a href="#architecture">Architecture</a> · <a href="#principles">Principles</a> · <a href="#project-structure">Project Structure</a> · <a href="#api-endpoints">API Endpoints</a>
+  <b>A git-based repository system for machines.</b>
 </p>
 
 ## Overview
 
-Orbit is a lightweight, superfast git server that exposes a REST API and Git Smart HTTP transport. It stores repository metadata in PostgreSQL and bare git repos on disk. Authentication is Bearer-only (login token or personal access token); read access is optional for public repos. The API is available at the root and under `/v1` for a stable versioned prefix. Optional Redis backs rate limiting across multiple instances.
+Orbit is the git hosting layer for the AURA platform. It stores repository metadata in PostgreSQL and bare git repos on disk. All AURA clients (desktop, web, mobile) and aura-swarm connect to orbit for code storage, commits, branches, PRs, and merges.
 
----
+Repos are linked to [aura-network](https://github.com/cypher-asi/aura-network) orgs and projects via cross-service UUIDs. Authentication uses the same zOS JWT tokens as all other AURA services.
 
-## Core Concepts
-
-1. **Repositories:** Top-level container owned by a user. Each repo has a slug, visibility (public or private), default branch, and optional description. Identified as `{owner}/{repo}` in paths; Git URLs use `{repo}.git` (e.g. `my-project.git`).
-
-2. **Branches, commits, and tree:** Branches point at commits. The API lists commits (with optional ref), fetches a single commit and its diff, and browses the tree or fetches blob content by ref and path.
-
-3. **Pull requests:** Create PRs from a source branch to a target branch, update title/description, close or reopen, fetch diff and mergeability and conflicts, and merge (merge or squash). PRs are identified by UUID in the path; the `number` field remains for display (e.g. "PR #5").
-
-4. **Git HTTP transport:** Standard Git clients use `GET /{owner}/{repo}/info/refs` and `POST /{owner}/{repo}/git-upload-pack` (fetch/clone) and `git-receive-pack` (push). Paths include the `.git` suffix. Public repos allow anonymous read; private repos and push require Bearer auth.
-
-5. **Auth:** Login (`POST /auth/login`) or register (`POST /auth/register`) yields a token; alternatively create personal access tokens (`POST /auth/tokens`). Use `Authorization: Bearer <token>` for API and Git HTTP. Optional on read endpoints; public repos allow anonymous read.
+GitHub mirror is supported as a secondary/backup — when an org has a GitHub integration configured in aura-network, orbit mirrors pushes to the configured GitHub repo.
 
 ---
 
@@ -33,221 +19,225 @@ Orbit is a lightweight, superfast git server that exposes a REST API and Git Sma
 ### Prerequisites
 
 - Rust toolchain
-- PostgreSQL (connection URL for `DATABASE_URL`)
-- Optional: Redis (for distributed rate limiting across instances)
+- PostgreSQL
+- `git` CLI (orbit shells out to git for bare repo operations)
+- Optional: Redis (for distributed rate limiting)
 
-### Configuration
-
-Copy `.env.example` to `.env` and set at least `DATABASE_URL` and `GIT_STORAGE_ROOT`. For production, consider `CORS_ALLOWED_ORIGINS`, `PUBLIC_BASE_URL`, and `REDIS_URL`. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for server and client (e.g. aura-app) setup.
-
-### Run
+### Setup
 
 ```
+cp .env.example .env
+# Edit .env with your database URL and auth config
+
 cargo run
 ```
 
-The server binds to `SERVER_HOST:SERVER_PORT` (default `0.0.0.0:3000`). Database migrations run on startup. Liveness: **GET /health**. Discovery (metadata for clients): **GET /** or **GET /api**.
+The server binds to `0.0.0.0:3000` by default. Migrations run on startup.
 
----
-
-## Principles
-
-1. **Self-hosted:** Your data stays in your PostgreSQL and git storage. No cloud dependency; run Orbit on your own infrastructure.
-2. **REST + Git HTTP:** Standard Git clients work via Smart HTTP. REST clients (e.g. aura-app) integrate using the discovery endpoint for base URL and clone URL prefix.
-3. **Bearer-only auth:** Login or PAT; same token for REST and Git HTTP. Rate limiting (auth 10/min, token create 20/min, repo create / repo write / admin mutations / git push 30/min per IP) with optional Redis for multi-instance consistency.
-
----
-
-## Architecture
-
-Single Rust binary (Axum). Modules and responsibilities:
-
-| Module | Description |
-| --- | --- |
-| **api** | Router composition, health check, discovery, rate-limit layers |
-| **auth** | Login, PAT CRUD, password hashing, Bearer extraction, admin extractor |
-| **users** | Registration, profile (GET/PATCH /users/me) |
-| **repos** | Repository CRUD, list by user |
-| **branches** | Branch list, create, get, delete |
-| **commits** | Commit list, get, diff; tree and blob browsing |
-| **tags** | Tag list (name + target SHA) |
-| **pull_requests** | PR CRUD, close, reopen, diff, mergeability, conflicts |
-| **merge_engine** | Merge PR (merge/squash strategies) |
-| **permissions** | Collaborators list, add/update role, remove |
-| **events** | Repo-scoped and admin audit events, logging init |
-| **admin** | Admin users, repos, jobs, events (read and mutation routes) |
-| **git_http** | Git Smart HTTP (info/refs, upload-pack, receive-pack) |
-| **jobs** | Background job definitions and worker |
-| **storage** | Git storage path and pack operations |
-| **db** | Connection pool and migrations |
-| **config** | Env-based configuration |
-| **errors** | Shared error types and responses |
-
----
-
-## Project Structure
+### Health Check
 
 ```
-orbit/
-  Cargo.toml                 # Rust package
-  .env.example               # Env template (DATABASE_URL, GIT_STORAGE_ROOT, etc.)
-  src/
-    main.rs                  # Entrypoint, migrations, server, job worker
-    app_state.rs             # Shared Axum state
-    config.rs                # Config load
-    db.rs                    # Pool and migrations
-    errors.rs                # Error handling
-    api/                     # Router, health, discovery, rate_limit, pagination, response
-    auth/                    # Login, tokens, middleware, extractors
-    users/                   # Register, profile routes
-    repos/                   # Repo CRUD routes and service
-    branches/                # Branch routes and service
-    commits/                 # Commits, tree, blob routes and service
-    tags/                    # Tags routes and service
-    pull_requests/           # PR routes and service
-    merge_engine/            # Merge handler and strategies
-    permissions/             # Collaborator routes and service
-    events/                  # Event routes, service, logging
-    admin/                   # Admin routes
-    git_http/                # Git HTTP routes and service
-    jobs/                    # Job models, service, worker
-    storage/                 # Git storage service
-  docs/
-    API.md                   # Full API reference (bodies, errors, rate limiting)
-    CONFIGURATION.md         # Server and client configuration
+curl http://localhost:3000/health
 ```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `GIT_STORAGE_ROOT` | No | Path for bare git repos (default: `./data/repos`) |
+| `AUTH0_DOMAIN` | Yes | Auth0 domain for JWKS |
+| `AUTH0_AUDIENCE` | Yes | Auth0 audience identifier |
+| `AUTH_COOKIE_SECRET` | Yes | Shared secret for HS256 token validation (same as aura-network/storage) |
+| `INTERNAL_SERVICE_TOKEN` | Yes | Token for service-to-service auth (X-Internal-Token) |
+| `AURA_NETWORK_URL` | No | aura-network base URL for GitHub mirror integration lookups |
+| `SERVER_HOST` | No | Bind address (default: `0.0.0.0`) |
+| `SERVER_PORT` | No | Bind port (default: `3000`) |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins. Omit for permissive (dev mode) |
+| `REDIS_URL` | No | Redis URL for distributed rate limiting |
+| `PUBLIC_BASE_URL` | No | Public URL for discovery endpoint |
 
 ---
 
-## API Endpoints
+## Authentication
 
-All REST routes are also mounted under **/v1** (e.g. **GET /v1/repos**). Git HTTP and **GET /health** stay at the root. Auth: `Authorization: Bearer <token>`; optional on read for public repos. Resource IDs are UUIDs.
+All API endpoints require a JWT in the `Authorization: Bearer <token>` header. Same zOS tokens as aura-network and aura-storage — both RS256 (Auth0 JWKS) and HS256 (shared secret) are accepted.
 
-**Full reference:** [docs/API.md](docs/API.md) — request/response bodies, errors, rate limiting.
+For Git HTTP (clone/push), the JWT is passed as the password in Basic auth. Username can be anything.
+
+```
+git clone https://x-token:JWT_HERE@orbit.example.com/{org_id}/{repo}.git
+```
+
+Internal (service-to-service) endpoints use `X-Internal-Token` header.
+
+---
+
+## API Reference
+
+All REST routes are also available under `/v1` (e.g. `GET /v1/repos`). Resource IDs are UUIDs. Responses use **camelCase** JSON.
 
 ### Discovery
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | / or /api | Server metadata (api_version, base_url, git_url_prefix, auth). No auth. |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/` or `/api` | Server metadata (apiVersion, baseUrl, gitUrlPrefix) | None |
 
 ### Health
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /health | Liveness/readiness. No auth. |
-
-### Authentication
-
-| Method | Path | Description |
-| --- | --- | --- |
-| POST | /auth/register | Register user (username, email, password). |
-| POST | /auth/login | Login (login + password). Returns token and user. |
-| POST | /auth/tokens | Create PAT (name, optional expires_in_days). Rate-limited. |
-| GET | /auth/tokens | List PATs (no raw token). |
-| DELETE | /auth/tokens/{id} | Revoke PAT. |
-
-### Users
-
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /users/me | Current user (auth required). |
-| PATCH | /users/me | Update profile (auth required). |
-| GET | /users/{username}/repos | List repos for user. Optional auth; public only for others. |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/health` | Liveness/readiness check | None |
 
 ### Repositories
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos | List repos accessible to current user (auth). |
-| POST | /repos | Create repo (auth). Rate-limited. |
-| GET | /repos/{owner}/{repo} | Get repo metadata. Optional auth. |
-| PATCH | /repos/{owner}/{repo} | Update repo (admin/owner). |
-| DELETE | /repos/{owner}/{repo} | Soft-delete repo (admin/owner). |
-| POST | /repos/{owner}/{repo}/archive | Archive repo (admin/owner). |
+Repos are scoped by org. Each repo has an `orgId`, `projectId`, and `ownerId` linking back to aura-network.
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos` | List repos accessible to current user | JWT |
+| POST | `/repos` | Create repo. Body: `{"orgId": "...", "projectId": "...", "name": "...", "visibility": "public"}` | JWT |
+| GET | `/repos/{org_id}/{repo}` | Get repo metadata | JWT (optional for public) |
+| PATCH | `/repos/{org_id}/{repo}` | Update repo (owner) | JWT |
+| DELETE | `/repos/{org_id}/{repo}` | Soft-delete repo (owner) | JWT |
+| POST | `/repos/{org_id}/{repo}/archive` | Archive repo (owner) | JWT |
 
 ### Branches
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos/{owner}/{repo}/branches | List branches. Optional auth. |
-| POST | /repos/{owner}/{repo}/branches | Create branch (write). |
-| GET | /repos/{owner}/{repo}/branches/{*branch} | Get branch. Optional auth. |
-| DELETE | /repos/{owner}/{repo}/branches/{*branch} | Delete branch (write). |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos/{org_id}/{repo}/branches` | List branches | JWT (optional for public) |
+| POST | `/repos/{org_id}/{repo}/branches` | Create branch | JWT (write) |
+| GET | `/repos/{org_id}/{repo}/branches/{*branch}` | Get branch | JWT (optional for public) |
+| DELETE | `/repos/{org_id}/{repo}/branches/{*branch}` | Delete branch | JWT (write) |
 
-### Commits and tree
+### Commits & Tree
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos/{owner}/{repo}/commits | List commits (ref, limit, offset). |
-| GET | /repos/{owner}/{repo}/commits/{sha} | Get commit. |
-| GET | /repos/{owner}/{repo}/commits/{sha}/diff | Get commit diff. |
-| GET | /repos/{owner}/{repo}/tree/{ref}/{*path} | Browse tree. Empty path = root. |
-| GET | /repos/{owner}/{repo}/blob/{ref}/{*path} | Get file content. |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos/{org_id}/{repo}/commits` | List commits. Params: `?ref=&limit=&offset=` | JWT (optional for public) |
+| GET | `/repos/{org_id}/{repo}/commits/{sha}` | Get commit | JWT (optional for public) |
+| GET | `/repos/{org_id}/{repo}/commits/{sha}/diff` | Get commit diff | JWT (optional for public) |
+| GET | `/repos/{org_id}/{repo}/tree/{ref}/{*path}` | Browse tree | JWT (optional for public) |
+| GET | `/repos/{org_id}/{repo}/blob/{ref}/{*path}` | Get file content | JWT (optional for public) |
 
 ### Tags
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos/{owner}/{repo}/tags | List tags (name + target SHA). Optional auth. |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos/{org_id}/{repo}/tags` | List tags. Params: `?limit=&offset=` | JWT (optional for public) |
+
+### Pull Requests
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos/{org_id}/{repo}/pulls` | List PRs. Params: `?status=&limit=&offset=` | JWT (optional for public) |
+| POST | `/repos/{org_id}/{repo}/pulls` | Create PR. Body: `{"sourceBranch": "...", "targetBranch": "...", "title": "..."}` | JWT (write) |
+| GET | `/repos/{org_id}/{repo}/pulls/{id}` | Get PR (id = UUID) | JWT (optional for public) |
+| PATCH | `/repos/{org_id}/{repo}/pulls/{id}` | Update title/description | JWT (author or write) |
+| POST | `/repos/{org_id}/{repo}/pulls/{id}/close` | Close PR | JWT (author or write) |
+| POST | `/repos/{org_id}/{repo}/pulls/{id}/reopen` | Reopen PR | JWT (author or write) |
+| GET | `/repos/{org_id}/{repo}/pulls/{id}/diff` | Get PR diff | JWT (optional for public) |
+| GET | `/repos/{org_id}/{repo}/pulls/{id}/mergeability` | Mergeability check | JWT (optional for public) |
+| GET | `/repos/{org_id}/{repo}/pulls/{id}/conflicts` | Conflict check | JWT (optional for public) |
+| POST | `/repos/{org_id}/{repo}/pulls/{id}/merge` | Merge PR. Body: `{"strategy": "merge"}` | JWT (write) |
+
+Merge strategies: `merge` (merge commit), `squash` (squash and merge).
 
 ### Collaborators
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos/{owner}/{repo}/collaborators | List collaborators (admin/owner). |
-| PUT | /repos/{owner}/{repo}/collaborators/{username} | Add or update role (reader/writer/owner). |
-| DELETE | /repos/{owner}/{repo}/collaborators/{username} | Remove collaborator. |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos/{org_id}/{repo}/collaborators` | List collaborators | JWT (owner) |
+| PUT | `/repos/{org_id}/{repo}/collaborators/{user_id}` | Add/update collaborator. Body: `{"role": "writer"}` | JWT (owner) |
+| DELETE | `/repos/{org_id}/{repo}/collaborators/{user_id}` | Remove collaborator | JWT (owner) |
 
-### Pull requests
+Roles: `owner`, `writer`, `reader`.
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos/{owner}/{repo}/pulls | List PRs (status, author_id, limit, offset). |
-| POST | /repos/{owner}/{repo}/pulls | Create PR (write). Rate-limited. |
-| GET | /repos/{owner}/{repo}/pulls/{id} | Get PR (id = UUID). |
-| PATCH | /repos/{owner}/{repo}/pulls/{id} | Update title/description (author or write). |
-| POST | /repos/{owner}/{repo}/pulls/{id}/close | Close PR. |
-| POST | /repos/{owner}/{repo}/pulls/{id}/reopen | Reopen PR. |
-| GET | /repos/{owner}/{repo}/pulls/{id}/diff | Get PR diff (text). |
-| GET | /repos/{owner}/{repo}/pulls/{id}/mergeability | Mergeability state. |
-| GET | /repos/{owner}/{repo}/pulls/{id}/conflicts | Conflict check (files). |
-| POST | /repos/{owner}/{repo}/pulls/{id}/merge | Merge PR (write). Rate-limited. |
+### Repo Events
 
-### Repo events
-
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | /repos/{owner}/{repo}/events | Audit events for repo (event_type, since, until, limit, offset). Read auth. |
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/repos/{org_id}/{repo}/events` | Audit events. Params: `?event_type=&since=&until=&limit=&offset=` | JWT (owner) |
 
 ### Admin
 
-All require admin authentication.
+Authenticated via `X-Internal-Token` header.
 
 | Method | Path | Description |
-| --- | --- | --- |
-| GET | /admin/users | List users (limit, offset, username prefix). |
-| GET | /admin/users/{id} | Get user. |
-| POST | /admin/users/{id}/disable | Disable user. Rate-limited. |
-| POST | /admin/users/{id}/enable | Enable user. Rate-limited. |
-| GET | /admin/repos | List repos (limit, offset, search). |
-| GET | /admin/repos/{id} | Get repo + storage_exists. |
-| POST | /admin/repos/{id}/archive | Archive repo. Rate-limited. |
-| GET | /admin/jobs | List jobs (limit, offset, status). |
-| GET | /admin/jobs/failed | List failed jobs. |
-| POST | /admin/jobs/{id}/retry | Retry job. Rate-limited. |
-| GET | /admin/events | Audit events (actor_id, repo_id, event_type, since, until, limit, offset). |
+|---|---|---|
+| GET | `/admin/repos` | List all repos |
+| GET | `/admin/repos/{id}` | Get repo + storage status |
+| POST | `/admin/repos/{id}/archive` | Archive repo |
+| GET | `/admin/jobs` | List jobs |
+| GET | `/admin/jobs/failed` | List failed jobs |
+| POST | `/admin/jobs/{id}/retry` | Retry job |
+| GET | `/admin/events` | Audit events (global) |
 
-### Git HTTP transport
+### Internal
 
-Paths use `{repo}` **including** `.git` (e.g. `my-repo.git`). Clone URL: `https://<host>/<owner>/<repo>.git`.
+Authenticated via `X-Internal-Token` header. Called by aura-network for auto-repo creation.
 
 | Method | Path | Description |
-| --- | --- | --- |
-| GET | /{owner}/{repo}/info/refs?service=git-upload-pack | Ref advertisement for fetch/clone. |
-| GET | /{owner}/{repo}/info/refs?service=git-receive-pack | Ref advertisement for push. Auth + write. |
-| POST | /{owner}/{repo}/git-upload-pack | Pack negotiation (fetch/clone). |
-| POST | /{owner}/{repo}/git-receive-pack | Push. Auth + write; rejects archived. Rate-limited. |
+|---|---|---|
+| POST | `/internal/repos` | Auto-create repo. Body: `{"orgId": "...", "projectId": "...", "ownerId": "...", "name": "...", "visibility": "public"}` |
+
+### Git HTTP Transport
+
+Git clone/push uses JWT as password in Basic auth. Paths use `{org_id}` and `{repo}` includes `.git` suffix.
+
+Clone URL: `https://x-token:JWT@host/{org_id}/{repo}.git`
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | `/{org_id}/{repo}/info/refs?service=git-upload-pack` | Ref advertisement (clone/fetch) | Optional for public |
+| GET | `/{org_id}/{repo}/info/refs?service=git-receive-pack` | Ref advertisement (push) | JWT (write) |
+| POST | `/{org_id}/{repo}/git-upload-pack` | Clone/fetch | Optional for public |
+| POST | `/{org_id}/{repo}/git-receive-pack` | Push | JWT (write) |
+
+---
+
+## Request/Response Format
+
+All responses use JSON with **camelCase** field names.
+
+**Successful responses:** 200 with JSON body, or 204 No Content for DELETE operations.
+
+**Error responses:**
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "repository not found",
+    "details": null
+  }
+}
+```
+
+Error codes: `VALIDATION_ERROR` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `INTERNAL_ERROR` (500).
+
+---
+
+## GitHub Mirror
+
+When an org has a GitHub integration configured in aura-network, orbit automatically mirrors pushes to the configured GitHub repo. This provides a secondary/backup for code storage.
+
+Setup:
+1. Configure a GitHub integration in aura-network: `POST /api/orgs/:id/integrations` with `{"integrationType": "github", "config": {"owner": "...", "repo": "...", "token": "ghp_..."}}`
+2. Set `AURA_NETWORK_URL` in orbit's environment
+3. Pushes to orbit will automatically mirror to GitHub
+
+---
+
+## Cross-Service References
+
+Repos store UUIDs that reference entities in aura-network. These are **not** foreign key constrained (different databases).
+
+| Field | References |
+|---|---|
+| `org_id` | Organization in aura-network |
+| `project_id` | Project in aura-network |
+| `owner_id` | User (zero user UUID) |
 
 ---
 
