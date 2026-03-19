@@ -151,6 +151,7 @@ mod tests {
             auth0_audience: String::new(),
             auth_cookie_secret: String::new(),
             internal_service_token: String::new(),
+            aura_network_url: None,
         }
     }
 
@@ -168,6 +169,7 @@ mod tests {
             auth0_audience: String::new(),
             auth_cookie_secret: String::new(),
             internal_service_token: String::new(),
+            aura_network_url: None,
         }
     }
 

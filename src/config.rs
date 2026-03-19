@@ -46,6 +46,9 @@ pub struct Config {
     pub auth_cookie_secret: String,
     /// Token for service-to-service auth (X-Internal-Token header).
     pub internal_service_token: String,
+    /// aura-network base URL for integration lookups (e.g. `https://aura-network.onrender.com`).
+    /// Required for GitHub mirror — orbit queries aura-network for org integration config.
+    pub aura_network_url: Option<String>,
 }
 
 impl Config {
@@ -93,6 +96,8 @@ impl Config {
         let internal_service_token =
             env::var("INTERNAL_SERVICE_TOKEN").context("INTERNAL_SERVICE_TOKEN must be set")?;
 
+        let aura_network_url = env::var("AURA_NETWORK_URL").ok().filter(|s| !s.is_empty());
+
         Ok(Config {
             database_url,
             server_host,
@@ -106,6 +111,7 @@ impl Config {
             auth0_audience,
             auth_cookie_secret,
             internal_service_token,
+            aura_network_url,
         })
     }
 

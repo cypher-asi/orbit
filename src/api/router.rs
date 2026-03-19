@@ -390,6 +390,7 @@ mod tests {
             auth0_audience: String::new(),
             auth_cookie_secret: String::new(),
             internal_service_token: String::new(),
+            aura_network_url: None,
         };
         let header = REQUEST_ID_HEADER.parse().unwrap();
         let _cors = build_cors_layer(&config, &header).unwrap();
@@ -414,6 +415,7 @@ mod tests {
             auth0_audience: String::new(),
             auth_cookie_secret: String::new(),
             internal_service_token: String::new(),
+            aura_network_url: None,
         };
         let header = REQUEST_ID_HEADER.parse().unwrap();
         let _cors = build_cors_layer(&config, &header).unwrap();
@@ -434,6 +436,7 @@ mod tests {
             auth0_audience: String::new(),
             auth_cookie_secret: String::new(),
             internal_service_token: String::new(),
+            aura_network_url: None,
         };
         let header = REQUEST_ID_HEADER.parse().unwrap();
         assert!(build_cors_layer(&config, &header).is_err());
@@ -456,6 +459,7 @@ mod tests {
             auth0_audience: String::new(),
             auth_cookie_secret: String::new(),
             internal_service_token: String::new(),
+            aura_network_url: None,
         };
         let layers = RateLimitLayers::build(&config)
             .await

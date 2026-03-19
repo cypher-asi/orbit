@@ -410,6 +410,16 @@ pub async fn receive_pack(
         });
     }
 
+    // Mirror to GitHub if configured (fire-and-forget).
+    {
+        let config = state.config.clone();
+        let org_id = repo.org_id;
+        let disk_path = disk_path.clone();
+        tokio::spawn(async move {
+            crate::github_mirror::mirror_if_configured(&config, org_id, &disk_path).await;
+        });
+    }
+
     Ok((
         StatusCode::OK,
         [(
