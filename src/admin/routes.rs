@@ -164,8 +164,6 @@ async fn retry_job(
 /// defense-in-depth, even though they already require admin authentication.
 ///
 /// Mounts:
-/// - `POST   /admin/users/{id}/disable` -- disable user
-/// - `POST   /admin/users/{id}/enable`  -- enable user
 /// - `POST   /admin/repos/{id}/archive` -- archive repo
 /// - `POST   /admin/jobs/{id}/retry`    -- retry failed job
 pub fn admin_mutation_routes() -> Router<AppState> {
@@ -180,8 +178,6 @@ pub fn admin_mutation_routes() -> Router<AppState> {
 /// global middleware stack.
 ///
 /// Mounts:
-/// - `GET    /admin/users`              -- list users (pagination + search)
-/// - `GET    /admin/users/{id}`         -- get user details
 /// - `GET    /admin/repos`              -- list repos (pagination + search)
 /// - `GET    /admin/repos/{id}`         -- get repo details + storage status
 /// - `GET    /admin/jobs`               -- list jobs (status filter)

@@ -145,22 +145,11 @@ fn repos_routes(layers: &RateLimitLayers) -> Router<AppState> {
         .merge(crate::events::routes::repo_event_routes())
 }
 
-/// Aggregate all user-profile routes.
+/// Placeholder for user-related routes.
 ///
-/// Includes:
-/// - `GET  /users/me`
-/// - `PATCH /users/me`
-/// - `GET  /users/{username}/repos` (served from repos::routes)
-///
-/// Note: user profile routes (`/users/me`) are part of `users_routes()` which
-/// is already merged via `auth_routes()`. The `/users/{username}/repos` route
-/// is part of `repo_routes()`. This function exists as a logical grouping
-/// point; in practice, the routes are contributed by those merged routers.
+/// With zOS JWT auth, user management is handled by aura-network.
+/// This empty router exists to maintain the route group structure.
 fn users_routes() -> Router<AppState> {
-    // The /users/me endpoints come from users::routes::users_routes() which
-    // is already merged in auth_routes(). The /users/{username}/repos route
-    // lives in repos::routes::repo_routes() which is merged in repos_routes().
-    // Return an empty router here -- the routes are already covered.
     Router::new()
 }
 
@@ -314,10 +303,9 @@ fn apply_middleware(
 /// | Prefix | Source |
 /// |--------|--------|
 /// | `/health` | Health check |
-/// | `/auth/*` | Auth (login, register, PAT management) |
 /// | `/repos/*` | Repositories, branches, commits, PRs, merge, collaborators |
-/// | `/users/*` | User profiles |
-/// | `/admin/*` | Admin management (users, repos, jobs, events) |
+/// | `/admin/*` | Admin management (repos, jobs, events) |
+/// | `/internal/*` | Service-to-service endpoints (X-Internal-Token auth) |
 /// | `/{org_id}/{repo}.git/*` | Git HTTP transport (info/refs, upload-pack, receive-pack) |
 ///
 /// ## Middleware Stack
@@ -360,15 +348,15 @@ pub async fn build_router(state: AppState) -> anyhow::Result<Router> {
         // Discovery (no auth): GET / and GET /api
         .route("/", get(discovery))
         .route("/api", get(discovery))
-        // Auth routes (register, login, PAT CRUD, /users/me)
+        // Auth routes (placeholder — auth is JWT-based, no user-facing auth endpoints)
         .merge(auth_routes(&layers))
         // Repository routes (CRUD, branches, commits, PRs, merge, collaborators, events)
         .merge(repos_routes(&layers))
-        // User routes (logical group -- actual routes merged via auth_routes / repos_routes)
+        // User routes (placeholder — user management is in aura-network)
         .merge(users_routes())
-        // Admin routes (user/repo/job management, audit events)
+        // Admin routes (repo/job management, audit events)
         .merge(admin_routes(&layers))
-        // Versioned API: same REST under /v1 (e.g. /v1/repos, /v1/auth/login)
+        // Versioned API under /v1
         .nest("/v1", v1_router)
         // Internal endpoints (X-Internal-Token auth, service-to-service)
         .merge(crate::internal::internal_routes())
