@@ -71,7 +71,7 @@ async fn list_users(
     State(state): State<AppState>,
     Query(params): Query<AdminListUsersQuery>,
 ) -> Result<Json<Vec<UserResponse>>, ApiError> {
-    let limit = params.limit.unwrap_or(50).min(100).max(1);
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).max(0);
 
     let users =
@@ -153,7 +153,7 @@ async fn list_repos(
     State(state): State<AppState>,
     Query(params): Query<AdminListReposQuery>,
 ) -> Result<Json<Vec<RepoResponse>>, ApiError> {
-    let limit = params.limit.unwrap_or(50).min(100).max(1);
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).max(0);
 
     let repos =
@@ -216,7 +216,7 @@ async fn list_jobs(
     State(state): State<AppState>,
     Query(params): Query<AdminListJobsQuery>,
 ) -> Result<Json<Vec<Job>>, ApiError> {
-    let limit = params.limit.unwrap_or(50).min(100).max(1);
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let offset = params.offset.unwrap_or(0).max(0);
 
     let jobs_list = jobs::list_jobs(&state.db, limit, offset, params.status.as_deref()).await?;
@@ -230,7 +230,7 @@ async fn list_failed_jobs(
     State(state): State<AppState>,
     Query(params): Query<AdminListJobsQuery>,
 ) -> Result<Json<Vec<Job>>, ApiError> {
-    let limit = params.limit.unwrap_or(50).min(100).max(1) as u32;
+    let limit = params.limit.unwrap_or(50).clamp(1, 100) as u32;
 
     let jobs_list = jobs::list_failed(&state.db, limit).await?;
     Ok(Json(jobs_list))
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn limit_clamping_logic() {
-        let clamp = |limit: Option<i64>| limit.unwrap_or(50).min(100).max(1);
+        let clamp = |limit: Option<i64>| limit.unwrap_or(50).clamp(1, 100);
         assert_eq!(clamp(None), 50);
         assert_eq!(clamp(Some(200)), 100);
         assert_eq!(clamp(Some(0)), 1);

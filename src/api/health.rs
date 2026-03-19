@@ -233,11 +233,10 @@ mod tests {
         assert_eq!(value["components"]["redis"]["status"], "down");
         // Should include an error message
         assert!(
-            value["components"]["redis"]["message"]
+            !value["components"]["redis"]["message"]
                 .as_str()
                 .unwrap_or("")
-                .len()
-                > 0
+                .is_empty()
         );
     }
 

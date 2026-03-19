@@ -31,7 +31,7 @@ pub async fn create_repo(
 ) -> Result<Repo, ApiError> {
     // 1. Generate & validate slug.
     let slug = generate_slug(&input.name);
-    validate_slug(&slug).map_err(|msg| ApiError::BadRequest(msg))?;
+    validate_slug(&slug).map_err(ApiError::BadRequest)?;
 
     let visibility = input.visibility.unwrap_or(Visibility::Private);
 
@@ -286,7 +286,7 @@ pub async fn update_repo(
     let new_slug = match &input.name {
         Some(name) => {
             let slug = generate_slug(name);
-            validate_slug(&slug).map_err(|msg| ApiError::BadRequest(msg))?;
+            validate_slug(&slug).map_err(ApiError::BadRequest)?;
             Some(slug)
         }
         None => None,
