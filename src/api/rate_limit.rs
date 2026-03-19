@@ -41,7 +41,7 @@ use tower::{Layer, Service};
 
 /// Configuration for the rate limiter.
 #[derive(Debug, Clone)]
-pub struct RateLimitConfig {
+pub(crate) struct RateLimitConfig {
     /// Maximum number of requests allowed within the time window.
     pub requests_per_window: u32,
     /// Time window in seconds over which `requests_per_window` are allowed.
@@ -63,11 +63,11 @@ impl Default for RateLimitConfig {
 // ---------------------------------------------------------------------------
 
 /// Result of a rate-limit check.
-pub type RateLimitResult = Result<bool, RateLimitError>;
+pub(crate) type RateLimitResult = Result<bool, RateLimitError>;
 
 /// Errors that can occur when checking rate limits or building rate limiters.
 #[derive(Debug)]
-pub enum RateLimitError {
+pub(crate) enum RateLimitError {
     /// Redis backend encountered an error.
     BackendError(String),
     /// Invalid rate limit configuration (e.g. requests_per_window is 0).
@@ -89,7 +89,7 @@ impl std::error::Error for RateLimitError {}
 ///
 /// Implementations must be cheaply cloneable (`Clone`), thread-safe
 /// (`Send + Sync`), and support async rate-limit checks.
-pub trait RateLimitBackend: Send + Sync + 'static {
+pub(crate) trait RateLimitBackend: Send + Sync + 'static {
     /// Check whether the given key (typically a client IP) is allowed to
     /// proceed under the configured rate limit.
     ///
@@ -114,7 +114,7 @@ type IpKeyedLimiter =
 /// Fast and zero-dependency but resets on restart and does not share state
 /// across multiple server instances.
 #[derive(Clone)]
-pub struct InMemoryBackend {
+pub(crate) struct InMemoryBackend {
     /// Per-IP rate limiter.
     limiter: Arc<IpKeyedLimiter>,
     /// Fallback global limiter for when client IP is unknown.
@@ -169,7 +169,7 @@ impl RateLimitBackend for InMemoryBackend {
 ///
 /// The Redis connection manager automatically reconnects on failure.
 #[derive(Clone)]
-pub struct RedisBackend {
+pub(crate) struct RedisBackend {
     /// Redis connection manager (auto-reconnecting).
     client: redis::aio::ConnectionManager,
     /// Maximum requests per window.
@@ -281,7 +281,7 @@ impl RateLimitBackend for RedisBackend {
 ///
 /// Wraps an `Arc<dyn RateLimitBackend>` for cheap cloning and dynamic dispatch.
 #[derive(Clone)]
-pub struct RateLimitState {
+pub(crate) struct RateLimitState {
     backend: Arc<dyn RateLimitBackend>,
     /// Whether to fail open (allow requests) when the backend errors.
     /// Defaults to true for Redis, always true for in-memory (which never errors).
@@ -330,7 +330,7 @@ impl RateLimitState {
 ///
 /// Intended to be applied to specific route groups (e.g. auth endpoints).
 #[derive(Clone)]
-pub struct RateLimitLayer {
+pub(crate) struct RateLimitLayer {
     state: RateLimitState,
 }
 
@@ -374,7 +374,7 @@ impl<S> Layer<S> for RateLimitLayer {
 /// or falls back to the `x-forwarded-for` / `x-real-ip` headers.
 /// If the rate limit is exceeded, returns a 429 JSON error response.
 #[derive(Clone)]
-pub struct RateLimitService<S> {
+pub(crate) struct RateLimitService<S> {
     inner: S,
     state: RateLimitState,
 }
@@ -490,7 +490,7 @@ where
 ///
 /// Limits: 10 requests per 60 seconds per IP.
 /// This is intentionally conservative to prevent brute-force login attempts.
-pub fn auth_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
+pub(crate) fn auth_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 10,
         window_secs: 60,
@@ -503,7 +503,7 @@ pub fn auth_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
 /// Limits: 20 requests per 60 seconds per IP.
 /// More permissive than login since token creation requires authentication,
 /// but still rate-limited to prevent abuse.
-pub fn token_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
+pub(crate) fn token_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 20,
         window_secs: 60,
@@ -514,7 +514,7 @@ pub fn token_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
 /// Create a [`RateLimitLayer`] for auth endpoints backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn auth_rate_limit_layer_redis(
+pub(crate) async fn auth_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
@@ -539,7 +539,7 @@ pub async fn auth_rate_limit_layer_redis(
 /// Create a [`RateLimitLayer`] for token creation endpoints backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn token_rate_limit_layer_redis(
+pub(crate) async fn token_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
@@ -565,7 +565,7 @@ pub async fn token_rate_limit_layer_redis(
 ///
 /// Limits: 30 requests per 60 seconds per IP.
 /// Prevents mass creation of repositories by a single IP.
-pub fn repo_create_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
+pub(crate) fn repo_create_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -579,7 +579,7 @@ pub fn repo_create_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> 
 /// Limits: 30 requests per 60 seconds per IP.
 /// These operations are computationally expensive and should be protected
 /// against automated abuse.
-pub fn repo_write_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
+pub(crate) fn repo_write_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -594,7 +594,7 @@ pub fn repo_write_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
 /// Limits: 30 requests per 60 seconds per IP.
 /// Admin endpoints are already behind authentication and admin-role checks,
 /// but rate limiting adds defense-in-depth.
-pub fn admin_action_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
+pub(crate) fn admin_action_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -607,7 +607,7 @@ pub fn admin_action_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError>
 /// Limits: 30 requests per 60 seconds per IP.
 /// Git push operations are expensive (disk I/O, pack processing) and should
 /// be rate-limited to prevent abuse.
-pub fn git_receive_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
+pub(crate) fn git_receive_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
         requests_per_window: 30,
         window_secs: 60,
@@ -618,7 +618,7 @@ pub fn git_receive_rate_limit_layer() -> Result<RateLimitLayer, RateLimitError> 
 /// Create a [`RateLimitLayer`] for repo creation backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn repo_create_rate_limit_layer_redis(
+pub(crate) async fn repo_create_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
@@ -643,7 +643,7 @@ pub async fn repo_create_rate_limit_layer_redis(
 /// Create a [`RateLimitLayer`] for write-heavy repo operations backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn repo_write_rate_limit_layer_redis(
+pub(crate) async fn repo_write_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
@@ -668,7 +668,7 @@ pub async fn repo_write_rate_limit_layer_redis(
 /// Create a [`RateLimitLayer`] for admin actions backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn admin_action_rate_limit_layer_redis(
+pub(crate) async fn admin_action_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {
@@ -693,7 +693,7 @@ pub async fn admin_action_rate_limit_layer_redis(
 /// Create a [`RateLimitLayer`] for Git push operations backed by Redis.
 ///
 /// Falls back to in-memory if the Redis connection fails.
-pub async fn git_receive_rate_limit_layer_redis(
+pub(crate) async fn git_receive_rate_limit_layer_redis(
     redis_url: &str,
 ) -> Result<RateLimitLayer, RateLimitError> {
     let config = RateLimitConfig {

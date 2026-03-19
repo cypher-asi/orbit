@@ -7,7 +7,7 @@ use crate::app_state::AppState;
 /// Status of an individual health check component.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub enum ComponentStatus {
+pub(crate) enum ComponentStatus {
     /// The component is healthy and responding.
     Up,
     /// The component is not responding or returned an error.
@@ -16,7 +16,7 @@ pub enum ComponentStatus {
 
 /// Health status of a single component with optional detail message.
 #[derive(Debug, Clone, Serialize)]
-pub struct ComponentHealth {
+pub(crate) struct ComponentHealth {
     pub status: ComponentStatus,
     /// Optional human-readable detail (e.g. error message on failure).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,7 +85,7 @@ async fn check_redis_inner(redis_url: &str) -> Result<(), String> {
 ///     "status": "ok"
 /// }
 /// ```
-pub async fn health_check(State(state): State<AppState>) -> Json<Value> {
+pub(crate) async fn health_check(State(state): State<AppState>) -> Json<Value> {
     let mut components = serde_json::Map::new();
     let mut all_healthy = true;
 

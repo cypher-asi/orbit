@@ -11,7 +11,7 @@ use crate::app_state::AppState;
 
 /// Discovery response body.
 #[derive(Debug, Serialize)]
-pub struct DiscoveryResponse {
+pub(crate) struct DiscoveryResponse {
     /// API version (e.g. "1" for /v1).
     pub api_version: String,
     /// Base URL for the REST API (no trailing slash).
@@ -26,7 +26,7 @@ pub struct DiscoveryResponse {
 ///
 /// Returns server metadata so clients can configure the orbit base URL,
 /// API version, and Git remote. No authentication required.
-pub async fn discovery(State(state): State<AppState>) -> Json<DiscoveryResponse> {
+pub(crate) async fn discovery(State(state): State<AppState>) -> Json<DiscoveryResponse> {
     let base_url = state.config.base_url();
     let git_url_prefix = state.config.git_url_prefix();
 
