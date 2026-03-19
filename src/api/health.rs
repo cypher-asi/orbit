@@ -146,6 +146,10 @@ mod tests {
             cors_allowed_origins: vec![],
             redis_url: None,
             public_base_url: None,
+            auth0_domain: String::new(),
+            auth0_audience: String::new(),
+            auth_cookie_secret: String::new(),
+            internal_service_token: String::new(),
         }
     }
 
@@ -159,6 +163,10 @@ mod tests {
             cors_allowed_origins: vec![],
             redis_url: Some(url.to_string()),
             public_base_url: None,
+            auth0_domain: String::new(),
+            auth0_audience: String::new(),
+            auth_cookie_secret: String::new(),
+            internal_service_token: String::new(),
         }
     }
 

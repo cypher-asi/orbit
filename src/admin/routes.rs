@@ -196,23 +196,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn admin_list_users_query_defaults() {
-        let query: AdminListUsersQuery = serde_json::from_str("{}").unwrap();
-        assert!(query.limit.is_none());
-        assert!(query.offset.is_none());
-        assert!(query.username.is_none());
-    }
-
-    #[test]
-    fn admin_list_users_query_with_values() {
-        let query: AdminListUsersQuery =
-            serde_json::from_str(r#"{"limit": 10, "offset": 20, "username": "alice"}"#).unwrap();
-        assert_eq!(query.limit, Some(10));
-        assert_eq!(query.offset, Some(20));
-        assert_eq!(query.username.as_deref(), Some("alice"));
-    }
-
-    #[test]
     fn admin_list_repos_query_defaults() {
         let query: AdminListReposQuery = serde_json::from_str("{}").unwrap();
         assert!(query.limit.is_none());

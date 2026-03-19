@@ -91,7 +91,7 @@ impl Role {
     }
 }
 
-/// A row from the `repo_members` table with joined user info.
+/// A row from the `repo_members` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct RepoMember {
     pub id: Uuid,
@@ -99,10 +99,6 @@ pub struct RepoMember {
     pub user_id: Uuid,
     pub role: Role,
     pub created_at: DateTime<Utc>,
-    /// Joined from `users.username`.
-    pub username: String,
-    /// Joined from `users.display_name`.
-    pub display_name: Option<String>,
 }
 
 /// Minimal repo row used internally by permission checks (visibility and archived only).
@@ -196,12 +192,8 @@ mod tests {
             user_id: uuid::Uuid::nil(),
             role: Role::Writer,
             created_at: chrono::Utc::now(),
-            username: "alice".to_string(),
-            display_name: Some("Alice".to_string()),
         };
         let json = serde_json::to_value(&member).unwrap();
         assert_eq!(json["role"], "writer");
-        assert_eq!(json["username"], "alice");
-        assert_eq!(json["display_name"], "Alice");
     }
 }

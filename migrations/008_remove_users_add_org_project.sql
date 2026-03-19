@@ -1,8 +1,8 @@
--- Drop foreign key constraints referencing users table
-ALTER TABLE repos DROP CONSTRAINT repos_owner_id_fkey;
-ALTER TABLE repo_members DROP CONSTRAINT repo_members_user_id_fkey;
-ALTER TABLE pull_requests DROP CONSTRAINT pull_requests_author_id_fkey;
-ALTER TABLE pull_requests DROP CONSTRAINT pull_requests_merged_by_fkey;
+-- Drop ALL foreign key constraints referencing users table
+ALTER TABLE repos DROP CONSTRAINT IF EXISTS repos_owner_id_fkey;
+ALTER TABLE repo_members DROP CONSTRAINT IF EXISTS repo_members_user_id_fkey;
+ALTER TABLE pull_requests DROP CONSTRAINT IF EXISTS pull_requests_author_id_fkey;
+ALTER TABLE pull_requests DROP CONSTRAINT IF EXISTS pull_requests_merged_by_fkey;
 
 -- Add org_id and project_id to repos (cross-service refs to aura-network)
 ALTER TABLE repos ADD COLUMN org_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';

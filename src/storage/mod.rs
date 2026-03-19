@@ -9,10 +9,13 @@ use crate::errors::ApiError;
 
 /// Initialize a bare Git repository on disk for the given repo ID.
 ///
-/// The repository is created at `<storage_root>/<repo_id>.git`.
+/// Uses fan-out layout: `<storage_root>/<prefix>/<repo_id>.git`
+/// where prefix is the first 2 characters of the UUID.
 /// If the directory already exists this is a no-op (idempotent).
 pub async fn init_bare_repo(storage_root: &Path, repo_id: Uuid) -> Result<(), ApiError> {
-    let repo_path = storage_root.join(format!("{}.git", repo_id));
+    let id_str = repo_id.to_string();
+    let prefix = &id_str[..2];
+    let repo_path = storage_root.join(prefix).join(format!("{}.git", id_str));
 
     if repo_path.exists() {
         tracing::warn!(
