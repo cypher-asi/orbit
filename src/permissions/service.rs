@@ -41,7 +41,9 @@ pub async fn check_repo_access(
         Some(uid) => uid,
         None => {
             if is_public {
-                return Err(ApiError::Forbidden("authentication required".to_string()));
+                return Err(ApiError::Unauthorized(
+                    "authentication required".to_string(),
+                ));
             }
             return Err(ApiError::NotFound("repository not found".to_string()));
         }

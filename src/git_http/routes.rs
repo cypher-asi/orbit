@@ -100,7 +100,9 @@ pub async fn info_refs(
     } else {
         // git-receive-pack: always requires auth + write permission.
         if viewer_id.is_none() {
-            return Err(ApiError::Forbidden("authentication required".to_string()));
+            return Err(ApiError::Unauthorized(
+                "authentication required".to_string(),
+            ));
         }
 
         // Check write permission (this also handles archived check).
@@ -329,7 +331,9 @@ pub async fn receive_pack(
     let viewer_id = user.as_ref().map(|u| u.id);
 
     if viewer_id.is_none() {
-        return Err(ApiError::Forbidden("authentication required".to_string()));
+        return Err(ApiError::Unauthorized(
+            "authentication required".to_string(),
+        ));
     }
 
     permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Write)
