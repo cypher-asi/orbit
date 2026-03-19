@@ -16,6 +16,7 @@ pub(crate) enum ComponentStatus {
 
 /// Health status of a single component with optional detail message.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ComponentHealth {
     pub status: ComponentStatus,
     /// Optional human-readable detail (e.g. error message on failure).

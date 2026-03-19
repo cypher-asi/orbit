@@ -40,6 +40,7 @@ impl std::fmt::Display for MergeStrategy {
 
 /// The result of a successful merge operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeResult {
     /// SHA of the merge commit (or the resulting tip commit for squash/rebase).
     pub merge_commit_sha: String,
@@ -55,6 +56,7 @@ pub struct MergeResult {
 
 /// Input body for a merge request.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeRequest {
     /// The merge strategy to use.
     pub strategy: MergeStrategy,
@@ -68,6 +70,7 @@ pub struct MergeRequest {
 
 /// The result of a conflict check between two branches.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConflictCheck {
     /// Whether there are merge conflicts.
     pub has_conflicts: bool,
@@ -149,9 +152,9 @@ mod tests {
             merged_at: chrono::Utc::now(),
         };
         let json = serde_json::to_value(&result).unwrap();
-        assert_eq!(json["merge_commit_sha"], "abc123");
+        assert_eq!(json["mergeCommitSha"], "abc123");
         assert_eq!(json["strategy"], "merge_commit");
-        assert!(json["merged_at"].is_string());
+        assert!(json["mergedAt"].is_string());
     }
 
     // -- MergeRequest tests -------------------------------------------------
@@ -160,7 +163,7 @@ mod tests {
     fn merge_request_deserialize_full() {
         let json = r#"{
             "strategy": "squash",
-            "commit_message": "Squash all the things"
+            "commitMessage": "Squash all the things"
         }"#;
         let req: MergeRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.strategy, MergeStrategy::Squash);
@@ -198,8 +201,8 @@ mod tests {
             conflicting_files: vec![],
         };
         let json = serde_json::to_value(&check).unwrap();
-        assert_eq!(json["has_conflicts"], false);
-        assert_eq!(json["conflicting_files"], serde_json::json!([]));
+        assert_eq!(json["hasConflicts"], false);
+        assert_eq!(json["conflictingFiles"], serde_json::json!([]));
     }
 
     #[test]
@@ -209,16 +212,16 @@ mod tests {
             conflicting_files: vec!["file1.rs".to_string(), "file2.rs".to_string()],
         };
         let json = serde_json::to_value(&check).unwrap();
-        assert_eq!(json["has_conflicts"], true);
+        assert_eq!(json["hasConflicts"], true);
         assert_eq!(
-            json["conflicting_files"],
+            json["conflictingFiles"],
             serde_json::json!(["file1.rs", "file2.rs"])
         );
     }
 
     #[test]
     fn conflict_check_deserialize() {
-        let json = r#"{"has_conflicts": true, "conflicting_files": ["a.txt"]}"#;
+        let json = r#"{"hasConflicts": true, "conflictingFiles": ["a.txt"]}"#;
         let check: ConflictCheck = serde_json::from_str(json).unwrap();
         assert!(check.has_conflicts);
         assert_eq!(check.conflicting_files, vec!["a.txt"]);

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Information about a Git tag in a repository.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TagInfo {
     /// Tag name (e.g. "v1.0.0").
     pub name: String,

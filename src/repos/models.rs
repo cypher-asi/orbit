@@ -76,6 +76,7 @@ impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Visibility {
 
 /// Represents a row in the `repos` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Repo {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -98,6 +99,7 @@ pub struct Repo {
 
 /// API response type for a repository. Excludes `deleted_at`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepoResponse {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -138,6 +140,7 @@ impl From<Repo> for RepoResponse {
 
 /// Input for creating a new repository.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateRepoInput {
     /// Repository name (used to derive the slug).
     pub name: String,
@@ -150,6 +153,7 @@ pub struct CreateRepoInput {
 
 /// Input for updating an existing repository.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateRepoInput {
     /// New name (slug will be re-derived).
     pub name: Option<String>,

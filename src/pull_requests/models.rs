@@ -77,6 +77,7 @@ impl<'q> sqlx::Encode<'q, sqlx::Postgres> for PrStatus {
 
 /// Represents a row in the `pull_requests` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct PullRequest {
     pub id: Uuid,
     pub repo_id: Uuid,
@@ -99,6 +100,7 @@ pub struct PullRequest {
 
 /// Input for creating a new pull request.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreatePrInput {
     pub repo_id: Uuid,
     pub author_id: Uuid,
@@ -110,6 +112,7 @@ pub struct CreatePrInput {
 
 /// Input for updating an existing pull request.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatePrInput {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -238,10 +241,10 @@ mod tests {
     #[test]
     fn create_pr_input_deserialize_full() {
         let json = r#"{
-            "repo_id": "00000000-0000-0000-0000-000000000001",
-            "author_id": "00000000-0000-0000-0000-000000000002",
-            "source_branch": "feature/foo",
-            "target_branch": "main",
+            "repoId": "00000000-0000-0000-0000-000000000001",
+            "authorId": "00000000-0000-0000-0000-000000000002",
+            "sourceBranch": "feature/foo",
+            "targetBranch": "main",
             "title": "Add feature foo",
             "description": "This adds the foo feature"
         }"#;
@@ -258,10 +261,10 @@ mod tests {
     #[test]
     fn create_pr_input_deserialize_no_description() {
         let json = r#"{
-            "repo_id": "00000000-0000-0000-0000-000000000001",
-            "author_id": "00000000-0000-0000-0000-000000000002",
-            "source_branch": "feature/bar",
-            "target_branch": "main",
+            "repoId": "00000000-0000-0000-0000-000000000001",
+            "authorId": "00000000-0000-0000-0000-000000000002",
+            "sourceBranch": "feature/bar",
+            "targetBranch": "main",
             "title": "Add feature bar"
         }"#;
         let input: CreatePrInput = serde_json::from_str(json).unwrap();

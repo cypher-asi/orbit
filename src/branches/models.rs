@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Information about a Git branch in a repository.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BranchInfo {
     /// Branch name (e.g. "main", "feature/foo").
     pub name: String,
@@ -24,13 +25,13 @@ mod tests {
         };
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["name"], "main");
-        assert_eq!(json["head_commit"], "abc123");
-        assert_eq!(json["is_default"], true);
+        assert_eq!(json["headCommit"], "abc123");
+        assert_eq!(json["isDefault"], true);
     }
 
     #[test]
     fn branch_info_deserializes() {
-        let json = r#"{"name":"develop","head_commit":"def456","is_default":false}"#;
+        let json = r#"{"name":"develop","headCommit":"def456","isDefault":false}"#;
         let info: BranchInfo = serde_json::from_str(json).unwrap();
         assert_eq!(info.name, "develop");
         assert_eq!(info.head_commit, "def456");

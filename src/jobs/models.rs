@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 /// Represents a row in the `jobs` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: Uuid,
     pub job_type: String,

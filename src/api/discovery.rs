@@ -11,6 +11,7 @@ use crate::app_state::AppState;
 
 /// Discovery response body.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct DiscoveryResponse {
     /// API version (e.g. "1" for /v1).
     pub api_version: String,

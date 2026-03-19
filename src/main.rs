@@ -103,13 +103,30 @@ async fn main() -> anyhow::Result<()> {
         shutdown_rx,
     ));
 
-    // Run the HTTP server with graceful shutdown on Ctrl+C.
+    // Run the HTTP server with graceful shutdown on SIGINT and SIGTERM.
     let server = axum::serve(listener, app).with_graceful_shutdown(async move {
-        if let Err(e) = tokio::signal::ctrl_c().await {
-            tracing::error!(error = %e, "Failed to listen for Ctrl+C");
-            std::process::exit(1);
+        let ctrl_c = tokio::signal::ctrl_c();
+
+        #[cfg(unix)]
+        {
+            let mut sigterm =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("Failed to install SIGTERM handler");
+            tokio::select! {
+                _ = ctrl_c => {},
+                _ = sigterm.recv() => {},
+            }
         }
-        tracing::info!("received Ctrl+C, initiating graceful shutdown");
+
+        #[cfg(not(unix))]
+        {
+            if let Err(e) = ctrl_c.await {
+                tracing::error!(error = %e, "Failed to listen for Ctrl+C");
+                std::process::exit(1);
+            }
+        }
+
+        tracing::info!("shutdown signal received, initiating graceful shutdown");
         let _ = shutdown_tx.send(true);
     });
 

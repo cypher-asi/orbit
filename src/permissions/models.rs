@@ -93,6 +93,7 @@ impl Role {
 
 /// A row from the `repo_members` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct RepoMember {
     pub id: Uuid,
     pub repo_id: Uuid,
@@ -195,5 +196,9 @@ mod tests {
         };
         let json = serde_json::to_value(&member).unwrap();
         assert_eq!(json["role"], "writer");
+        // Verify camelCase field names
+        assert!(json.get("repoId").is_some());
+        assert!(json.get("userId").is_some());
+        assert!(json.get("createdAt").is_some());
     }
 }

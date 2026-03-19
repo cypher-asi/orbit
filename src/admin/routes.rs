@@ -24,6 +24,7 @@ use crate::storage::service as storage_service;
 
 /// Query parameters for GET /admin/repos.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AdminListReposQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -33,6 +34,7 @@ pub struct AdminListReposQuery {
 
 /// Query parameters for GET /admin/jobs.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AdminListJobsQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -42,6 +44,7 @@ pub struct AdminListJobsQuery {
 
 /// Response for repo details with storage status.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AdminRepoDetailResponse {
     #[serde(flatten)]
     pub repo: RepoResponse,
@@ -263,7 +266,7 @@ mod tests {
 
         let json = serde_json::to_value(&response).unwrap();
         assert_eq!(json["name"], "test");
-        assert_eq!(json["storage_exists"], true);
+        assert_eq!(json["storageExists"], true);
         // Verify flatten works - repo fields are at top level
         assert!(json.get("id").is_some());
         assert!(json.get("visibility").is_some());

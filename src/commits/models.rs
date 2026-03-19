@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Information about a Git commit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommitInfo {
     /// Full commit SHA.
     pub sha: String,
@@ -32,6 +33,7 @@ pub enum TreeEntryType {
 
 /// An entry in a Git tree listing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TreeEntry {
     /// File or directory name.
     pub name: String,
@@ -47,6 +49,7 @@ pub struct TreeEntry {
 
 /// Contents of a file at a given ref and path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileContent {
     /// File content as a string (or base64 for binary).
     pub content: String,
@@ -68,6 +71,7 @@ pub enum DiffStatus {
 
 /// A changed file in a commit diff.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffEntry {
     /// File path.
     pub path: String,
@@ -99,8 +103,8 @@ mod tests {
         };
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["sha"], "abc123");
-        assert_eq!(json["author_name"], "Alice");
-        assert_eq!(json["parent_shas"][0], "def456");
+        assert_eq!(json["authorName"], "Alice");
+        assert_eq!(json["parentShas"][0], "def456");
     }
 
     #[test]
@@ -138,7 +142,7 @@ mod tests {
         let json = serde_json::to_value(&fc).unwrap();
         assert_eq!(json["content"], "hello world");
         assert_eq!(json["size"], 11);
-        assert_eq!(json["is_binary"], false);
+        assert_eq!(json["isBinary"], false);
     }
 
     #[test]

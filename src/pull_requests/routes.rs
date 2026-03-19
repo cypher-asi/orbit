@@ -28,6 +28,7 @@ use super::service as pr_service;
 
 /// Path parameters for `/repos/{org_id}/{repo}/pulls`.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OrgRepoPath {
     pub org_id: Uuid,
     pub repo: String,
@@ -36,6 +37,7 @@ pub struct OrgRepoPath {
 /// Path parameters for `/repos/{org_id}/{repo}/pulls/{id}`.
 /// `id` is the pull request's UUID.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OrgRepoPrPath {
     pub org_id: Uuid,
     pub repo: String,
@@ -48,6 +50,7 @@ pub struct OrgRepoPrPath {
 
 /// Query parameters for `GET /repos/{org_id}/{repo}/pulls`.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ListPrsQuery {
     pub status: Option<String>,
     pub author_id: Option<Uuid>,
@@ -61,6 +64,7 @@ pub struct ListPrsQuery {
 
 /// JSON body for `POST /repos/{org_id}/{repo}/pulls`.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreatePrRequest {
     pub source_branch: String,
     pub target_branch: String,
@@ -70,6 +74,7 @@ pub struct CreatePrRequest {
 
 /// JSON body for `PATCH /repos/{org_id}/{repo}/pulls/{id}`.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatePrRequest {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -351,6 +356,7 @@ async fn check_conflicts(
 
 /// JSON response for the mergeability check endpoint.
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeabilityResponse {
     pub mergeability: MergeabilityState,
 }

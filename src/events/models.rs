@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 /// Represents a row in the `audit_events` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct AuditEvent {
     pub id: Uuid,
     pub actor_id: Option<Uuid>,
@@ -112,7 +113,7 @@ mod tests {
             created_at: chrono::Utc::now(),
         };
         let json = serde_json::to_value(&event).unwrap();
-        assert_eq!(json["event_type"], "repo.created");
+        assert_eq!(json["eventType"], "repo.created");
         assert_eq!(json["metadata"]["key"], "value");
     }
 }

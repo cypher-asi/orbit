@@ -11,6 +11,7 @@ use crate::errors::ApiError;
 ///
 /// With zOS JWT auth, only the user UUID is available from the token.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthenticatedUser {
     pub id: Uuid,
 }
