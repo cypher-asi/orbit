@@ -363,6 +363,8 @@ mod tests {
             repo: RepoResponse {
                 id: Uuid::nil(),
                 owner_id: Uuid::nil(),
+                org_id: Uuid::nil(),
+                project_id: Uuid::nil(),
                 name: "test".to_string(),
                 slug: "test".to_string(),
                 description: None,

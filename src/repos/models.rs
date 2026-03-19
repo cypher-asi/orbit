@@ -79,6 +79,8 @@ impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Visibility {
 pub struct Repo {
     pub id: Uuid,
     pub owner_id: Uuid,
+    pub org_id: Uuid,
+    pub project_id: Uuid,
     pub name: String,
     pub slug: String,
     pub description: Option<String>,
@@ -99,6 +101,8 @@ pub struct Repo {
 pub struct RepoResponse {
     pub id: Uuid,
     pub owner_id: Uuid,
+    pub org_id: Uuid,
+    pub project_id: Uuid,
     pub name: String,
     pub slug: String,
     pub description: Option<String>,
@@ -114,6 +118,8 @@ impl From<Repo> for RepoResponse {
         RepoResponse {
             id: repo.id,
             owner_id: repo.owner_id,
+            org_id: repo.org_id,
+            project_id: repo.project_id,
             name: repo.name,
             slug: repo.slug,
             description: repo.description,
@@ -385,6 +391,8 @@ mod tests {
         let repo = Repo {
             id: Uuid::nil(),
             owner_id: Uuid::nil(),
+            org_id: Uuid::nil(),
+            project_id: Uuid::nil(),
             name: "test".to_string(),
             slug: "test".to_string(),
             description: Some("A test repo".to_string()),
