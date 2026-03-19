@@ -1,7 +1,6 @@
 <h1 align="center">ORBIT</h1>
 
 <p align="center">
-  <b>GitHub-lite Git Service</b><br>
   A superfast git service built for machines.
 </p>
 
