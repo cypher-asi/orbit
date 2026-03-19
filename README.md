@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>GitHub-lite Git Service</b><br>
-  A self-hosted git server with a REST API for repos, branches, commits, pull requests, and merge, plus Git Smart HTTP for clone, fetch, and push.
+  A lightweight super fast git server with a REST API for repos, branches, commits, pull requests, and merge, plus Git Smart HTTP for clone, fetch, and push.
 </p>
 
 <p align="center">
@@ -249,3 +249,9 @@ Paths use `{repo}` **including** `.git` (e.g. `my-repo.git`). Clone URL: `https:
 | GET | /{owner}/{repo}/info/refs?service=git-receive-pack | Ref advertisement for push. Auth + write. |
 | POST | /{owner}/{repo}/git-upload-pack | Pack negotiation (fetch/clone). |
 | POST | /{owner}/{repo}/git-receive-pack | Push. Auth + write; rejects archived. Rate-limited. |
+
+---
+
+## License
+
+MIT
