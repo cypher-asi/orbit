@@ -1,3 +1,9 @@
+//! Orbit server binary.
+//!
+//! Loads configuration from the environment, builds the API router with rate limiting
+//! and middleware, and runs the HTTP server with graceful shutdown. All startup errors
+//! are propagated via `anyhow::Result`; no panics in production paths.
+
 mod admin;
 mod api;
 mod app_state;
