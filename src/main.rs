@@ -15,6 +15,7 @@ mod db;
 mod errors;
 mod events;
 mod git_http;
+mod internal;
 mod jobs;
 mod merge_engine;
 mod permissions;

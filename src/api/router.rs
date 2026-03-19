@@ -370,6 +370,8 @@ pub async fn build_router(state: AppState) -> anyhow::Result<Router> {
         .merge(admin_routes(&layers))
         // Versioned API: same REST under /v1 (e.g. /v1/repos, /v1/auth/login)
         .nest("/v1", v1_router)
+        // Internal endpoints (X-Internal-Token auth, service-to-service)
+        .merge(crate::internal::internal_routes())
         // Git HTTP transport -- mounted at root; paths use `{repo}.git` suffix
         // so they don't conflict with `/repos/{org_id}/{repo}/...` API routes
         .merge(git_http_routes(&layers));
