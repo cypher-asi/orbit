@@ -284,6 +284,13 @@ pub async fn upload_pack(
     let stream = tokio_util::io::ReaderStream::new(stdout);
     let response_body = Body::from_stream(stream);
 
+    // Keep the child process alive until it exits naturally.
+    // Without this, kill_on_drop would kill the process when `child`
+    // goes out of scope, truncating the response stream.
+    tokio::spawn(async move {
+        let _ = child.wait().await;
+    });
+
     Ok((
         StatusCode::OK,
         [(
@@ -403,6 +410,11 @@ pub async fn receive_pack(
 
     let stream = tokio_util::io::ReaderStream::new(stdout);
     let response_body = Body::from_stream(stream);
+
+    // Keep the child process alive until it exits naturally.
+    tokio::spawn(async move {
+        let _ = child.wait().await;
+    });
 
     // Emit audit event for the push (fire-and-forget).
     if let Some(actor_id) = viewer_id {
