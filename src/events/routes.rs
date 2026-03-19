@@ -8,8 +8,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::auth::middleware::RequireAuth;
 use crate::auth::middleware::InternalAuth;
+use crate::auth::middleware::RequireAuth;
 use crate::errors::ApiError;
 use crate::permissions::models::Permission;
 use crate::permissions::service as permissions_service;
@@ -213,7 +213,10 @@ mod tests {
     fn org_repo_path_deserializes() {
         let json = r#"{"org_id": "00000000-0000-0000-0000-000000000001", "repo": "my-repo"}"#;
         let path: OrgRepoPath = serde_json::from_str(json).unwrap();
-        assert_eq!(path.org_id, Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+        assert_eq!(
+            path.org_id,
+            Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+        );
         assert_eq!(path.repo, "my-repo");
     }
 }

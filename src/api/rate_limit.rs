@@ -128,8 +128,9 @@ impl InMemoryBackend {
     /// Returns `RateLimitError::InvalidConfig` if `requests_per_window` is 0
     /// or if the computed quota period is 0.
     pub fn new(config: &RateLimitConfig) -> Result<Self, RateLimitError> {
-        let per_window = NonZeroU32::new(config.requests_per_window)
-            .ok_or_else(|| RateLimitError::InvalidConfig("requests_per_window must be > 0".to_string()))?;
+        let per_window = NonZeroU32::new(config.requests_per_window).ok_or_else(|| {
+            RateLimitError::InvalidConfig("requests_per_window must be > 0".to_string())
+        })?;
 
         let period_secs = config.window_secs / u64::from(config.requests_per_window.max(1));
         let quota = Quota::with_period(std::time::Duration::from_secs(period_secs))
@@ -1064,5 +1065,4 @@ mod tests {
         assert!(display.contains("connection refused"));
         assert!(display.contains("rate limit backend error"));
     }
-
 }

@@ -215,10 +215,7 @@ const REQUEST_ID_HEADER: &str = "x-request-id";
 /// When `config.cors_allowed_origins` is empty, any origin is allowed
 /// (suitable for development). When one or more origins are specified,
 /// only those origins are permitted (suitable for production).
-fn build_cors_layer(
-    config: &Config,
-    request_id_header: &HeaderName,
-) -> anyhow::Result<CorsLayer> {
+fn build_cors_layer(config: &Config, request_id_header: &HeaderName) -> anyhow::Result<CorsLayer> {
     let base = CorsLayer::new()
         .allow_methods(Any)
         .allow_headers(Any)

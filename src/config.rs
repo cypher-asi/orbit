@@ -61,8 +61,7 @@ impl Config {
         // Load .env file if present; ignore errors (file may not exist).
         let _ = dotenvy::dotenv();
 
-        let database_url =
-            env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+        let database_url = env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
 
         let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
@@ -87,10 +86,8 @@ impl Config {
 
         let public_base_url = env::var("PUBLIC_BASE_URL").ok().filter(|s| !s.is_empty());
 
-        let auth0_domain =
-            env::var("AUTH0_DOMAIN").context("AUTH0_DOMAIN must be set")?;
-        let auth0_audience =
-            env::var("AUTH0_AUDIENCE").context("AUTH0_AUDIENCE must be set")?;
+        let auth0_domain = env::var("AUTH0_DOMAIN").context("AUTH0_DOMAIN must be set")?;
+        let auth0_audience = env::var("AUTH0_AUDIENCE").context("AUTH0_AUDIENCE must be set")?;
         let auth_cookie_secret =
             env::var("AUTH_COOKIE_SECRET").context("AUTH_COOKIE_SECRET must be set")?;
         let internal_service_token =

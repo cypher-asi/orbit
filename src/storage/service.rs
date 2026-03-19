@@ -301,5 +301,4 @@ mod tests {
         let result = delete_repo(&config, id).await;
         assert!(result.is_ok());
     }
-
 }

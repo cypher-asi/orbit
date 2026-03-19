@@ -241,12 +241,10 @@ mod tests {
         assert_eq!(value["status"], "degraded");
         assert_eq!(value["components"]["redis"]["status"], "down");
         // Should include an error message
-        assert!(
-            !value["components"]["redis"]["message"]
-                .as_str()
-                .unwrap_or("")
-                .is_empty()
-        );
+        assert!(!value["components"]["redis"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .is_empty());
     }
 
     #[tokio::test]

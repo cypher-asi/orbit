@@ -39,8 +39,7 @@ async fn main() -> anyhow::Result<()> {
     events::logging::init_logging(&config.log_level);
 
     tracing::info!("Creating database connection pool");
-    let pool = db::create_pool(&config.database_url)
-        .context("create database pool")?;
+    let pool = db::create_pool(&config.database_url).context("create database pool")?;
 
     // Attempt to run database migrations; log a warning if the database
     // is not yet reachable so the server can still start for health checks.
@@ -59,8 +58,12 @@ async fn main() -> anyhow::Result<()> {
     // Ensure git storage root directory exists
     let git_storage_path = std::path::Path::new(&config.git_storage_root);
     if !git_storage_path.exists() {
-        fs::create_dir_all(git_storage_path)
-            .with_context(|| format!("create git storage root directory: {}", config.git_storage_root))?;
+        fs::create_dir_all(git_storage_path).with_context(|| {
+            format!(
+                "create git storage root directory: {}",
+                config.git_storage_root
+            )
+        })?;
         tracing::info!(path = %config.git_storage_root, "Created git storage root directory");
     }
 
@@ -71,7 +74,9 @@ async fn main() -> anyhow::Result<()> {
     let worker_pool = state.db.clone();
 
     // Build router via the central router composition
-    let app = api::router::build_router(state).await.context("build router")?;
+    let app = api::router::build_router(state)
+        .await
+        .context("build router")?;
 
     let bind_addr = format!("{}:{}", config.server_host, config.server_port);
     tracing::info!(address = %bind_addr, "Orbit server starting");

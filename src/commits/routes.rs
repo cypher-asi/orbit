@@ -210,6 +210,9 @@ pub fn commits_routes() -> Router<AppState> {
             get(get_commit_diff),
         )
         .route("/repos/{org_id}/{repo}/commits/{sha}", get(get_commit))
-        .route("/repos/{org_id}/{repo}/tree/{ref}/{*path}", get(browse_tree))
+        .route(
+            "/repos/{org_id}/{repo}/tree/{ref}/{*path}",
+            get(browse_tree),
+        )
         .route("/repos/{org_id}/{repo}/blob/{ref}/{*path}", get(get_blob))
 }
