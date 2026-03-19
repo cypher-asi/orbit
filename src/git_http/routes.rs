@@ -27,12 +27,12 @@ use super::service::{pkt_flush, pkt_line, resolve_git_repo};
 // Path / query extractors
 // ---------------------------------------------------------------------------
 
-/// Path parameters for `/{owner}/{repo}` Git routes.
+/// Path parameters for `/{org_id}/{repo}` Git routes.
 ///
 /// Note: `repo` includes the `.git` suffix (e.g. `my-repo.git`).
 #[derive(Debug, Deserialize)]
 pub struct GitRepoPath {
-    pub owner: String,
+    pub org_id: uuid::Uuid,
     pub repo: String,
 }
 
@@ -43,10 +43,10 @@ pub struct InfoRefsQuery {
 }
 
 // ---------------------------------------------------------------------------
-// GET /{owner}/{repo}.git/info/refs
+// GET /{org_id}/{repo}.git/info/refs
 // ---------------------------------------------------------------------------
 
-/// Handler for `GET /{owner}/{repo}.git/info/refs?service=...`
+/// Handler for `GET /{org_id}/{repo}.git/info/refs?service=...`
 ///
 /// Implements the Git Smart HTTP ref advertisement:
 ///
@@ -75,7 +75,7 @@ pub async fn info_refs(
 
     // Resolve the repository from the URL path.
     let (repo, disk_path) =
-        resolve_git_repo(&state.db, state.git_storage_root.as_path(), &path.owner, &path.repo).await?;
+        resolve_git_repo(&state.db, state.git_storage_root.as_path(), path.org_id, &path.repo).await?;
 
     // Authorization checks based on the service type.
     let viewer_id = user.as_ref().map(|u| u.id);
@@ -174,10 +174,10 @@ pub async fn info_refs(
 }
 
 // ---------------------------------------------------------------------------
-// POST /{owner}/{repo}.git/git-upload-pack
+// POST /{org_id}/{repo}.git/git-upload-pack
 // ---------------------------------------------------------------------------
 
-/// Handler for `POST /{owner}/{repo}.git/git-upload-pack`.
+/// Handler for `POST /{org_id}/{repo}.git/git-upload-pack`.
 ///
 /// Implements the Git Smart HTTP pack negotiation for clone/fetch:
 ///
@@ -196,7 +196,7 @@ pub async fn upload_pack(
 ) -> Result<Response, ApiError> {
     // Resolve the repository from the URL path.
     let (repo, disk_path) =
-        resolve_git_repo(&state.db, state.git_storage_root.as_path(), &path.owner, &path.repo).await?;
+        resolve_git_repo(&state.db, state.git_storage_root.as_path(), path.org_id, &path.repo).await?;
 
     // Authorization: public repos allow anonymous read; private repos
     // require auth + read permission.
@@ -284,10 +284,10 @@ pub async fn upload_pack(
 }
 
 // ---------------------------------------------------------------------------
-// POST /{owner}/{repo}.git/git-receive-pack
+// POST /{org_id}/{repo}.git/git-receive-pack
 // ---------------------------------------------------------------------------
 
-/// Handler for `POST /{owner}/{repo}.git/git-receive-pack`.
+/// Handler for `POST /{org_id}/{repo}.git/git-receive-pack`.
 ///
 /// Implements the Git Smart HTTP push protocol:
 ///
@@ -308,7 +308,7 @@ pub async fn receive_pack(
 ) -> Result<Response, ApiError> {
     // Resolve the repository from the URL path.
     let (repo, disk_path) =
-        resolve_git_repo(&state.db, state.git_storage_root.as_path(), &path.owner, &path.repo).await?;
+        resolve_git_repo(&state.db, state.git_storage_root.as_path(), path.org_id, &path.repo).await?;
 
     // Authorization: always requires auth + write permission.
     let viewer_id = user.as_ref().map(|u| u.id);
@@ -416,12 +416,12 @@ pub async fn receive_pack(
 /// rate limiting.
 ///
 /// Mounts:
-/// - `GET  /{owner}/{repo}/info/refs`       -- ref advertisement
-/// - `POST /{owner}/{repo}/git-upload-pack`  -- clone/fetch pack exchange
+/// - `GET  /{org_id}/{repo}/info/refs`       -- ref advertisement
+/// - `POST /{org_id}/{repo}/git-upload-pack`  -- clone/fetch pack exchange
 pub fn git_read_routes() -> Router<AppState> {
     Router::new()
-        .route("/{owner}/{repo}/info/refs", get(info_refs))
-        .route("/{owner}/{repo}/git-upload-pack", post(upload_pack))
+        .route("/{org_id}/{repo}/info/refs", get(info_refs))
+        .route("/{org_id}/{repo}/git-upload-pack", post(upload_pack))
 }
 
 /// Build a Router for the Git receive-pack (push) endpoint.
@@ -430,7 +430,7 @@ pub fn git_read_routes() -> Router<AppState> {
 /// rate-limited separately.
 ///
 /// Mounts:
-/// - `POST /{owner}/{repo}/git-receive-pack` -- push pack receive
+/// - `POST /{org_id}/{repo}/git-receive-pack` -- push pack receive
 pub fn git_receive_routes() -> Router<AppState> {
-    Router::new().route("/{owner}/{repo}/git-receive-pack", post(receive_pack))
+    Router::new().route("/{org_id}/{repo}/git-receive-pack", post(receive_pack))
 }

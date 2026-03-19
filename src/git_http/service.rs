@@ -1,40 +1,34 @@
 use std::path::PathBuf;
 
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::errors::ApiError;
 use crate::repos::models::Repo;
 use crate::repos::service as repo_service;
-use crate::users::service as user_service;
 
 /// Resolve a Git repository from URL path components.
 ///
-/// Strips a trailing `.git` suffix from `repo_slug` if present, looks up
-/// the owner by username, then looks up the repo by `(owner_id, slug)`.
+/// Strips a trailing `.git` suffix from `repo_slug` if present, then looks
+/// up the repo by `(org_id, slug)`.
 ///
 /// Returns the `Repo` record and the on-disk bare repository path.
 ///
 /// # Errors
 ///
-/// Returns `ApiError::NotFound` (with a generic message) if the owner or
-/// repo does not exist, to avoid leaking information about which part
-/// was missing.
+/// Returns `ApiError::NotFound` (with a generic message) if the repo does
+/// not exist.
 pub async fn resolve_git_repo(
     pool: &PgPool,
     storage_root: &std::path::Path,
-    owner_slug: &str,
+    org_id: Uuid,
     repo_slug: &str,
 ) -> Result<(Repo, PathBuf), ApiError> {
     // Strip trailing .git suffix if present.
     let slug = repo_slug.strip_suffix(".git").unwrap_or(repo_slug);
 
-    // Look up the owner by username.
-    let owner = user_service::get_user_by_username(pool, owner_slug)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    // Look up the repo by owner + slug.
-    let repo = repo_service::get_repo_by_owner_and_slug(pool, owner.id, slug)
+    // Look up the repo by org_id + slug.
+    let repo = repo_service::get_repo_by_org_and_slug(pool, org_id, slug)
         .await?
         .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
 

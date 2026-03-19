@@ -22,7 +22,6 @@ mod pull_requests;
 mod repos;
 mod storage;
 mod tags;
-mod users;
 
 use std::fs;
 use std::path::PathBuf;

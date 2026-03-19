@@ -13,8 +13,7 @@ use crate::auth::middleware::InternalAuth;
 use crate::errors::ApiError;
 use crate::permissions::models::Permission;
 use crate::permissions::service as permissions_service;
-use crate::repos::service as repo_service;
-use crate::users::service as user_service;
+use crate::repos::routes::resolve_repo;
 
 use super::models::{AuditEvent, EventFilter};
 use super::service;
@@ -35,7 +34,7 @@ pub struct AdminEventsQuery {
     pub offset: Option<u32>,
 }
 
-/// Query parameters for `GET /repos/{owner}/{repo}/events`.
+/// Query parameters for `GET /repos/{org_id}/{repo}/events`.
 #[derive(Debug, Deserialize)]
 pub struct RepoEventsQuery {
     pub event_type: Option<String>,
@@ -49,10 +48,10 @@ pub struct RepoEventsQuery {
 // Path extractors
 // ---------------------------------------------------------------------------
 
-/// Path parameters for `{owner}/{repo}` routes.
+/// Path parameters for `{org_id}/{repo}` routes.
 #[derive(Debug, Deserialize)]
-pub struct OwnerRepoPath {
-    pub owner: String,
+pub struct OrgRepoPath {
+    pub org_id: Uuid,
     pub repo: String,
 }
 
@@ -97,26 +96,20 @@ async fn admin_get_event(
     Ok(Json(event))
 }
 
-/// GET /repos/{owner}/{repo}/events -- List audit events scoped to a
+/// GET /repos/{org_id}/{repo}/events -- List audit events scoped to a
 /// repository (owner/admin access required).
 ///
-/// Resolves the repository from the `{owner}/{repo}` path, checks that the
+/// Resolves the repository from the `{org_id}/{repo}` path, checks that the
 /// authenticated user has Admin (owner) permission on the repo, then returns
 /// events filtered by `repo_id`.
 async fn repo_events(
     RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
-    Path(path): Path<OwnerRepoPath>,
+    Path(path): Path<OrgRepoPath>,
     Query(params): Query<RepoEventsQuery>,
 ) -> Result<Json<Vec<AuditEvent>>, ApiError> {
-    // Resolve owner and repo.
-    let owner = user_service::get_user_by_username(&state.db, &path.owner)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    let repo = repo_service::get_repo_by_owner_and_slug(&state.db, owner.id, &path.repo)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
+    // Resolve repo by org_id and slug.
+    let repo = resolve_repo(&state.db, path.org_id, &path.repo).await?;
 
     // Require Admin (owner) permission on the repo.
     permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Admin)
@@ -154,9 +147,9 @@ pub fn admin_event_routes() -> Router<AppState> {
 /// Build the Router for repo-scoped audit event endpoints.
 ///
 /// Mounts:
-/// - `GET /repos/{owner}/{repo}/events` -- repo-scoped events
+/// - `GET /repos/{org_id}/{repo}/events` -- repo-scoped events
 pub fn repo_event_routes() -> Router<AppState> {
-    Router::new().route("/repos/{owner}/{repo}/events", get(repo_events))
+    Router::new().route("/repos/{org_id}/{repo}/events", get(repo_events))
 }
 
 // ---------------------------------------------------------------------------
@@ -217,10 +210,10 @@ mod tests {
     }
 
     #[test]
-    fn owner_repo_path_deserializes() {
-        let json = r#"{"owner": "alice", "repo": "my-repo"}"#;
-        let path: OwnerRepoPath = serde_json::from_str(json).unwrap();
-        assert_eq!(path.owner, "alice");
+    fn org_repo_path_deserializes() {
+        let json = r#"{"org_id": "00000000-0000-0000-0000-000000000001", "repo": "my-repo"}"#;
+        let path: OrgRepoPath = serde_json::from_str(json).unwrap();
+        assert_eq!(path.org_id, Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
         assert_eq!(path.repo, "my-repo");
     }
 }

@@ -122,7 +122,7 @@ impl Config {
             .to_string()
     }
 
-    /// Prefix for Git clone URLs: `{git_url_prefix}{owner}/{repo}.git`.
+    /// Prefix for Git clone URLs: `{git_url_prefix}{org_id}/{repo}.git`.
     pub fn git_url_prefix(&self) -> String {
         format!("{}/", self.base_url())
     }

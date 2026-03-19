@@ -99,7 +99,7 @@ fn auth_routes(_layers: &RateLimitLayers) -> Router<AppState> {
 ///
 /// Rate limiting is applied to:
 /// - `POST /repos` (repo creation) -- 30/min per IP
-/// - `POST /repos/{owner}/{repo}/pulls` and merge -- 30/min per IP
+/// - `POST /repos/{org_id}/{repo}/pulls` and merge -- 30/min per IP
 fn repos_routes(layers: &RateLimitLayers) -> Router<AppState> {
     use axum::routing::post;
 
@@ -113,11 +113,11 @@ fn repos_routes(layers: &RateLimitLayers) -> Router<AppState> {
     // These are computationally expensive and should be protected.
     let rate_limited_repo_writes = Router::new()
         .route(
-            "/repos/{owner}/{repo}/pulls",
+            "/repos/{org_id}/{repo}/pulls",
             post(crate::pull_requests::routes::create_pr_handler()),
         )
         .route(
-            "/repos/{owner}/{repo}/pulls/{id}/merge",
+            "/repos/{org_id}/{repo}/pulls/{id}/merge",
             post(crate::merge_engine::routes::merge_pr_handler()),
         )
         .layer(layers.repo_write.clone());
@@ -127,21 +127,21 @@ fn repos_routes(layers: &RateLimitLayers) -> Router<AppState> {
         .merge(rate_limited_repo_create)
         // Rate-limited PR creation and merge
         .merge(rate_limited_repo_writes)
-        // Core repo CRUD (non-rate-limited parts): GET /repos, GET/PATCH/DELETE /repos/{owner}/{repo}, etc.
+        // Core repo CRUD (non-rate-limited parts): GET /repos, GET/PATCH/DELETE /repos/{org_id}/{repo}, etc.
         .merge(crate::repos::routes::repo_routes_without_create())
-        // Collaborators: GET/PUT/DELETE /repos/{owner}/{repo}/collaborators/...
+        // Collaborators: GET/PUT/DELETE /repos/{org_id}/{repo}/collaborators/...
         .merge(crate::permissions::routes::collaborator_routes())
-        // Branches: GET/POST/DELETE /repos/{owner}/{repo}/branches/...
+        // Branches: GET/POST/DELETE /repos/{org_id}/{repo}/branches/...
         .merge(crate::branches::routes::branches_routes())
-        // Commits & tree browsing: GET /repos/{owner}/{repo}/commits/...
+        // Commits & tree browsing: GET /repos/{org_id}/{repo}/commits/...
         .merge(crate::commits::routes::commits_routes())
-        // Tags: GET /repos/{owner}/{repo}/tags
+        // Tags: GET /repos/{org_id}/{repo}/tags
         .merge(crate::tags::routes::tags_routes())
         // Pull requests (non-rate-limited parts): GET/PATCH, close, reopen, diff, mergeability
         .merge(crate::pull_requests::routes::pull_request_routes_without_create())
         // Merge engine (non-rate-limited parts -- the merge POST is above)
         // Note: merge_engine_routes_without_merge() is empty since there is only one route
-        // Repo-scoped events: GET /repos/{owner}/{repo}/events
+        // Repo-scoped events: GET /repos/{org_id}/{repo}/events
         .merge(crate::events::routes::repo_event_routes())
 }
 
@@ -192,9 +192,9 @@ fn admin_routes(layers: &RateLimitLayers) -> Router<AppState> {
 /// Git HTTP transport routes.
 ///
 /// Includes:
-/// - `GET  /{owner}/{repo}/info/refs`
-/// - `POST /{owner}/{repo}/git-upload-pack`
-/// - `POST /{owner}/{repo}/git-receive-pack`
+/// - `GET  /{org_id}/{repo}/info/refs`
+/// - `POST /{org_id}/{repo}/git-upload-pack`
+/// - `POST /{org_id}/{repo}/git-receive-pack`
 ///
 /// These use `{repo}` that includes the `.git` suffix (e.g. `my-repo.git`),
 /// so they naturally do not conflict with API routes under `/repos/...`.
@@ -318,7 +318,7 @@ fn apply_middleware(
 /// | `/repos/*` | Repositories, branches, commits, PRs, merge, collaborators |
 /// | `/users/*` | User profiles |
 /// | `/admin/*` | Admin management (users, repos, jobs, events) |
-/// | `/{owner}/{repo}.git/*` | Git HTTP transport (info/refs, upload-pack, receive-pack) |
+/// | `/{org_id}/{repo}.git/*` | Git HTTP transport (info/refs, upload-pack, receive-pack) |
 ///
 /// ## Middleware Stack
 ///
@@ -371,7 +371,7 @@ pub async fn build_router(state: AppState) -> anyhow::Result<Router> {
         // Versioned API: same REST under /v1 (e.g. /v1/repos, /v1/auth/login)
         .nest("/v1", v1_router)
         // Git HTTP transport -- mounted at root; paths use `{repo}.git` suffix
-        // so they don't conflict with `/repos/{owner}/{repo}/...` API routes
+        // so they don't conflict with `/repos/{org_id}/{repo}/...` API routes
         .merge(git_http_routes(&layers));
 
     // Apply the middleware stack and attach shared state

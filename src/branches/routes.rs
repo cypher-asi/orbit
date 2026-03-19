@@ -11,10 +11,9 @@ use crate::auth::middleware::{OptionalAuth, RequireAuth};
 use crate::errors::ApiError;
 use crate::permissions::models::Permission;
 use crate::permissions::service as permissions_service;
-use crate::repos::service as repo_service;
+use crate::repos::routes::resolve_repo;
 use crate::storage;
 use crate::storage::service::StorageConfig;
-use crate::users::service as user_service;
 
 use super::service as branch_service;
 
@@ -22,19 +21,19 @@ use super::service as branch_service;
 // Path extractors
 // ---------------------------------------------------------------------------
 
-/// Path parameters for `/repos/{owner}/{repo}/branches`.
+/// Path parameters for `/repos/{org_id}/{repo}/branches`.
 #[derive(Debug, Deserialize)]
-pub struct OwnerRepoPath {
-    pub owner: String,
+pub struct OrgRepoPath {
+    pub org_id: uuid::Uuid,
     pub repo: String,
 }
 
-/// Path parameters for `/repos/{owner}/{repo}/branches/{branch}`.
+/// Path parameters for `/repos/{org_id}/{repo}/branches/{branch}`.
 /// The branch name may contain slashes (e.g. `feature/foo`), so we
 /// capture it as a wildcard tail segment.
 #[derive(Debug, Deserialize)]
-pub struct OwnerRepoBranchPath {
-    pub owner: String,
+pub struct OrgRepoBranchPath {
+    pub org_id: uuid::Uuid,
     pub repo: String,
     pub branch: String,
 }
@@ -43,7 +42,7 @@ pub struct OwnerRepoBranchPath {
 // Request / response types
 // ---------------------------------------------------------------------------
 
-/// JSON body for `POST /repos/{owner}/{repo}/branches`.
+/// JSON body for `POST /repos/{org_id}/{repo}/branches`.
 #[derive(Debug, Deserialize)]
 pub struct CreateBranchRequest {
     pub name: String,
@@ -59,37 +58,17 @@ fn storage_config(state: &AppState) -> StorageConfig {
     StorageConfig::new(state.git_storage_root.clone())
 }
 
-/// Resolve a repository from `{owner}/{repo}` path params.
-///
-/// Looks up the user by username, then the repo by `(owner_id, slug)`.
-/// Returns `NotFound` if either the user or repo does not exist.
-async fn resolve_repo(
-    pool: &sqlx::PgPool,
-    owner_name: &str,
-    repo_slug: &str,
-) -> Result<crate::repos::models::Repo, ApiError> {
-    let owner = user_service::get_user_by_username(pool, owner_name)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    let repo = repo_service::get_repo_by_owner_and_slug(pool, owner.id, repo_slug)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    Ok(repo)
-}
-
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// GET /repos/{owner}/{repo}/branches -- List all branches (optional auth).
+/// GET /repos/{org_id}/{repo}/branches -- List all branches (optional auth).
 async fn list_branches(
     OptionalAuth(user): OptionalAuth,
     State(state): State<AppState>,
-    Path(path): Path<OwnerRepoPath>,
+    Path(path): Path<OrgRepoPath>,
 ) -> Result<Json<Vec<crate::branches::models::BranchInfo>>, ApiError> {
-    let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
+    let repo = resolve_repo(&state.db, path.org_id, &path.repo).await?;
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
@@ -101,13 +80,13 @@ async fn list_branches(
     Ok(Json(branches))
 }
 
-/// GET /repos/{owner}/{repo}/branches/{*branch} -- Get a single branch (optional auth).
+/// GET /repos/{org_id}/{repo}/branches/{*branch} -- Get a single branch (optional auth).
 async fn get_branch(
     OptionalAuth(user): OptionalAuth,
     State(state): State<AppState>,
-    Path(path): Path<OwnerRepoBranchPath>,
+    Path(path): Path<OrgRepoBranchPath>,
 ) -> Result<Json<crate::branches::models::BranchInfo>, ApiError> {
-    let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
+    let repo = resolve_repo(&state.db, path.org_id, &path.repo).await?;
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
@@ -121,14 +100,14 @@ async fn get_branch(
     Ok(Json(branch))
 }
 
-/// POST /repos/{owner}/{repo}/branches -- Create a branch (auth required, write access).
+/// POST /repos/{org_id}/{repo}/branches -- Create a branch (auth required, write access).
 async fn create_branch(
     RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
-    Path(path): Path<OwnerRepoPath>,
+    Path(path): Path<OrgRepoPath>,
     Json(body): Json<CreateBranchRequest>,
 ) -> Result<(StatusCode, Json<crate::branches::models::BranchInfo>), ApiError> {
-    let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
+    let repo = resolve_repo(&state.db, path.org_id, &path.repo).await?;
 
     // Check write permission (also rejects archived repos).
     permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)
@@ -167,13 +146,13 @@ async fn create_branch(
     Ok((StatusCode::CREATED, Json(branch)))
 }
 
-/// DELETE /repos/{owner}/{repo}/branches/{*branch} -- Delete a branch (auth required, write access).
+/// DELETE /repos/{org_id}/{repo}/branches/{*branch} -- Delete a branch (auth required, write access).
 async fn delete_branch(
     RequireAuth(user): RequireAuth,
     State(state): State<AppState>,
-    Path(path): Path<OwnerRepoBranchPath>,
+    Path(path): Path<OrgRepoBranchPath>,
 ) -> Result<StatusCode, ApiError> {
-    let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
+    let repo = resolve_repo(&state.db, path.org_id, &path.repo).await?;
 
     // Check write permission (also rejects archived repos).
     permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)
@@ -210,18 +189,18 @@ async fn delete_branch(
 /// Build the Router for branch management endpoints.
 ///
 /// Mounts:
-/// - `GET    /repos/{owner}/{repo}/branches`           -- list branches
-/// - `POST   /repos/{owner}/{repo}/branches`           -- create branch
-/// - `GET    /repos/{owner}/{repo}/branches/{*branch}`  -- get branch details
-/// - `DELETE /repos/{owner}/{repo}/branches/{*branch}`  -- delete branch
+/// - `GET    /repos/{org_id}/{repo}/branches`           -- list branches
+/// - `POST   /repos/{org_id}/{repo}/branches`           -- create branch
+/// - `GET    /repos/{org_id}/{repo}/branches/{*branch}`  -- get branch details
+/// - `DELETE /repos/{org_id}/{repo}/branches/{*branch}`  -- delete branch
 pub fn branches_routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/repos/{owner}/{repo}/branches",
+            "/repos/{org_id}/{repo}/branches",
             get(list_branches).post(create_branch),
         )
         .route(
-            "/repos/{owner}/{repo}/branches/{*branch}",
+            "/repos/{org_id}/{repo}/branches/{*branch}",
             get(get_branch).delete(delete_branch),
         )
 }

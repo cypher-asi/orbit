@@ -27,6 +27,8 @@ pub async fn create_repo(
     pool: &PgPool,
     storage_root: &Path,
     owner_id: Uuid,
+    org_id: Uuid,
+    project_id: Uuid,
     input: CreateRepoInput,
 ) -> Result<Repo, ApiError> {
     // 1. Generate & validate slug.
@@ -35,15 +37,17 @@ pub async fn create_repo(
 
     let visibility = input.visibility.unwrap_or(Visibility::Private);
 
-    // 2-3. Insert the repo row (unique constraint enforces per-owner uniqueness).
+    // 2-3. Insert the repo row (unique constraint enforces per-org uniqueness).
     let repo = sqlx::query_as::<_, Repo>(
         r#"
-        INSERT INTO repos (owner_id, name, slug, description, visibility)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO repos (owner_id, org_id, project_id, name, slug, description, visibility)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
         "#,
     )
     .bind(owner_id)
+    .bind(org_id)
+    .bind(project_id)
     .bind(&input.name)
     .bind(&slug)
     .bind(&input.description)
@@ -123,73 +127,26 @@ pub async fn get_repo(pool: &PgPool, id: Uuid) -> Result<Option<Repo>, ApiError>
     Ok(repo)
 }
 
-/// Get a repository by its owner ID and slug.
+/// Get a repository by its org ID and slug.
 ///
 /// Returns `None` if not found or soft-deleted.
-pub async fn get_repo_by_owner_and_slug(
+pub async fn get_repo_by_org_and_slug(
     pool: &PgPool,
-    owner_id: Uuid,
+    org_id: Uuid,
     slug: &str,
 ) -> Result<Option<Repo>, ApiError> {
     let repo = sqlx::query_as::<_, Repo>(
         r#"
         SELECT * FROM repos
-        WHERE owner_id = $1 AND slug = $2 AND deleted_at IS NULL
+        WHERE org_id = $1 AND slug = $2 AND deleted_at IS NULL
         "#,
     )
-    .bind(owner_id)
+    .bind(org_id)
     .bind(slug)
     .fetch_optional(pool)
     .await?;
 
     Ok(repo)
-}
-
-/// List repositories owned by a specific user.
-///
-/// If `viewer` is `Some(user_id)` and matches `user_id`, all (non-deleted)
-/// repos are returned. Otherwise only public repos are returned.
-pub async fn list_repos_for_user(
-    pool: &PgPool,
-    user_id: Uuid,
-    viewer: Option<Uuid>,
-    pagination: Pagination,
-) -> Result<Vec<Repo>, ApiError> {
-    let is_self = viewer == Some(user_id);
-
-    let repos = if is_self {
-        // Show all repos for the owner.
-        sqlx::query_as::<_, Repo>(
-            r#"
-            SELECT * FROM repos
-            WHERE owner_id = $1 AND deleted_at IS NULL
-            ORDER BY created_at DESC
-            LIMIT $2 OFFSET $3
-            "#,
-        )
-        .bind(user_id)
-        .bind(pagination.limit)
-        .bind(pagination.offset)
-        .fetch_all(pool)
-        .await?
-    } else {
-        // Show only public repos.
-        sqlx::query_as::<_, Repo>(
-            r#"
-            SELECT * FROM repos
-            WHERE owner_id = $1 AND deleted_at IS NULL AND visibility = 'public'
-            ORDER BY created_at DESC
-            LIMIT $2 OFFSET $3
-            "#,
-        )
-        .bind(user_id)
-        .bind(pagination.limit)
-        .bind(pagination.offset)
-        .fetch_all(pool)
-        .await?
-    };
-
-    Ok(repos)
 }
 
 /// List all repositories accessible to a user.

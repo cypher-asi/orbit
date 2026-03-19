@@ -16,7 +16,7 @@ pub(crate) struct DiscoveryResponse {
     pub api_version: String,
     /// Base URL for the REST API (no trailing slash).
     pub base_url: String,
-    /// Prefix for Git clone URLs: clone = `{git_url_prefix}{owner}/{repo}.git`.
+    /// Prefix for Git clone URLs: clone = `{git_url_prefix}{org_id}/{repo}.git`.
     pub git_url_prefix: String,
     /// Auth scheme: "bearer" (Bearer token in Authorization header).
     pub auth: String,

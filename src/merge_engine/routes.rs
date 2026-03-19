@@ -11,10 +11,9 @@ use crate::auth::middleware::RequireAuth;
 use crate::errors::ApiError;
 use crate::permissions::models::Permission;
 use crate::permissions::service as permissions_service;
-use crate::repos::service as repo_service;
+use crate::repos::routes::resolve_repo;
 use crate::storage;
 use crate::storage::service::StorageConfig;
-use crate::users::service as user_service;
 
 use super::models::{MergeRequest, MergeResult};
 use super::service as merge_service;
@@ -23,11 +22,11 @@ use super::service as merge_service;
 // Path extractors
 // ---------------------------------------------------------------------------
 
-/// Path parameters for `/repos/{owner}/{repo}/pulls/{id}/merge`.
+/// Path parameters for `/repos/{org_id}/{repo}/pulls/{id}/merge`.
 /// `id` is the pull request's UUID.
 #[derive(Debug, Deserialize)]
 pub struct MergePrPath {
-    pub owner: String,
+    pub org_id: Uuid,
     pub repo: String,
     pub id: Uuid,
 }
@@ -41,31 +40,11 @@ fn storage_config(state: &AppState) -> StorageConfig {
     StorageConfig::new(state.git_storage_root.clone())
 }
 
-/// Resolve a repository from `{owner}/{repo}` path params.
-///
-/// Looks up the user by username, then the repo by `(owner_id, slug)`.
-/// Returns `NotFound` if either the user or repo does not exist.
-async fn resolve_repo(
-    pool: &sqlx::PgPool,
-    owner_name: &str,
-    repo_slug: &str,
-) -> Result<crate::repos::models::Repo, ApiError> {
-    let owner = user_service::get_user_by_username(pool, owner_name)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    let repo = repo_service::get_repo_by_owner_and_slug(pool, owner.id, repo_slug)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    Ok(repo)
-}
-
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-/// POST /repos/{owner}/{repo}/pulls/{id}/merge -- Merge a PR (write access required).
+/// POST /repos/{org_id}/{repo}/pulls/{id}/merge -- Merge a PR (write access required).
 ///
 /// Accepts a JSON body with `strategy` and optional `commit_message`.
 /// Resolves the repository and PR by UUID, checks write permission, then delegates
@@ -85,7 +64,7 @@ async fn merge_pr(
     Path(path): Path<MergePrPath>,
     Json(body): Json<MergeRequest>,
 ) -> Result<Json<MergeResult>, ApiError> {
-    let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
+    let repo = resolve_repo(&state.db, path.org_id, &path.repo).await?;
 
     // Require write permission on the repo.
     permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)

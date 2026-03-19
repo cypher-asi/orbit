@@ -17,23 +17,10 @@ use crate::jobs::models::Job;
 use crate::repos::models::RepoResponse;
 use crate::repos::service as repo_service;
 use crate::storage::service as storage_service;
-use crate::users::routes::UserResponse;
-use crate::users::service as user_service;
 
 // ---------------------------------------------------------------------------
 // Query parameters
 // ---------------------------------------------------------------------------
-
-/// Query parameters for GET /admin/users.
-#[derive(Debug, Deserialize)]
-pub struct AdminListUsersQuery {
-    /// Maximum number of users to return (default: 50, max: 100).
-    pub limit: Option<i64>,
-    /// Number of users to skip (default: 0).
-    pub offset: Option<i64>,
-    /// Optional username prefix search.
-    pub username: Option<String>,
-}
 
 /// Query parameters for GET /admin/repos.
 #[derive(Debug, Deserialize)]
@@ -59,88 +46,6 @@ pub struct AdminRepoDetailResponse {
     #[serde(flatten)]
     pub repo: RepoResponse,
     pub storage_exists: bool,
-}
-
-// ---------------------------------------------------------------------------
-// User management handlers
-// ---------------------------------------------------------------------------
-
-/// GET /admin/users - List all users with pagination and optional username search.
-async fn list_users(
-    _admin: InternalAuth,
-    State(state): State<AppState>,
-    Query(params): Query<AdminListUsersQuery>,
-) -> Result<Json<Vec<UserResponse>>, ApiError> {
-    let limit = params.limit.unwrap_or(50).clamp(1, 100);
-    let offset = params.offset.unwrap_or(0).max(0);
-
-    let users =
-        user_service::list_users_search(&state.db, limit, offset, params.username.as_deref())
-            .await?;
-
-    let response: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
-    Ok(Json(response))
-}
-
-/// GET /admin/users/{id} - Get user details.
-async fn get_user(
-    _admin: InternalAuth,
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<Json<UserResponse>, ApiError> {
-    let user = user_service::get_user_by_id(&state.db, id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("user not found".to_string()))?;
-
-    Ok(Json(UserResponse::from(user)))
-}
-
-/// POST /admin/users/{id}/disable - Disable a user account.
-async fn disable_user(
-    _admin: InternalAuth,
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<StatusCode, ApiError> {
-    user_service::disable_user(&state.db, id).await?;
-
-    // Emit audit event
-    events::emit(
-        &state.db,
-        NewAuditEvent {
-            actor_id: None,
-            event_type: "admin.user_disabled".to_string(),
-            repo_id: None,
-            target_id: Some(id),
-            metadata: None,
-        },
-    )
-    .await;
-
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// POST /admin/users/{id}/enable - Enable a user account.
-async fn enable_user(
-    _admin: InternalAuth,
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<StatusCode, ApiError> {
-    user_service::enable_user(&state.db, id).await?;
-
-    // Emit audit event
-    events::emit(
-        &state.db,
-        NewAuditEvent {
-            actor_id: None,
-            event_type: "admin.user_enabled".to_string(),
-            repo_id: None,
-            target_id: Some(id),
-            metadata: None,
-        },
-    )
-    .await;
-
-    Ok(StatusCode::NO_CONTENT)
 }
 
 // ---------------------------------------------------------------------------
@@ -262,8 +167,6 @@ async fn retry_job(
 /// - `POST   /admin/jobs/{id}/retry`    -- retry failed job
 pub fn admin_mutation_routes() -> Router<AppState> {
     Router::new()
-        .route("/admin/users/{id}/disable", post(disable_user))
-        .route("/admin/users/{id}/enable", post(enable_user))
         .route("/admin/repos/{id}/archive", post(archive_repo))
         .route("/admin/jobs/{id}/retry", post(retry_job))
 }
@@ -282,8 +185,6 @@ pub fn admin_mutation_routes() -> Router<AppState> {
 /// - `GET    /admin/jobs/failed`        -- list failed jobs
 pub fn admin_read_routes() -> Router<AppState> {
     Router::new()
-        .route("/admin/users", get(list_users))
-        .route("/admin/users/{id}", get(get_user))
         .route("/admin/repos", get(list_repos))
         .route("/admin/repos/{id}", get(get_repo))
         .route("/admin/jobs", get(list_jobs))
