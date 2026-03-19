@@ -1,7 +1,8 @@
 <h1 align="center">ORBIT</h1>
 
 <p align="center">
-  <b>GitHub-lite Git Service</b>
+  <b>GitHub-lite Git Service</b><br>
+  A superfast git service built for machines.
 </p>
 
 <p align="center">
@@ -10,7 +11,7 @@
 
 ## Overview
 
-Orbit is a self-hosted git server that exposes a REST API and Git Smart HTTP transport. It stores repository metadata in PostgreSQL and bare git repos on disk. Authentication is Bearer-only (login token or personal access token); read access is optional for public repos. The API is available at the root and under `/v1` for a stable versioned prefix. Optional Redis backs rate limiting across multiple instances.
+Orbit is a lightweight, superfast git server that exposes a REST API and Git Smart HTTP transport. It stores repository metadata in PostgreSQL and bare git repos on disk. Authentication is Bearer-only (login token or personal access token); read access is optional for public repos. The API is available at the root and under `/v1` for a stable versioned prefix. Optional Redis backs rate limiting across multiple instances.
 
 ---
 
