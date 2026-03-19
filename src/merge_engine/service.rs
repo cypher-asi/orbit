@@ -37,10 +37,7 @@ fn advisory_lock_key(repo_id: Uuid, target_branch: &str) -> i64 {
 // ---------------------------------------------------------------------------
 
 /// Check whether a branch ref exists and return its HEAD SHA if it does.
-async fn resolve_branch_sha(
-    git: &GitCommand,
-    branch: &str,
-) -> Result<Option<String>, ApiError> {
+async fn resolve_branch_sha(git: &GitCommand, branch: &str) -> Result<Option<String>, ApiError> {
     let ref_name = format!("refs/heads/{}", branch);
     let output = git.run(&["rev-parse", "--verify", &ref_name]).await?;
     if output.success() {
@@ -68,9 +65,7 @@ async fn create_worktree(
         .ok_or_else(|| ApiError::Internal("invalid worktree path".to_string()))?;
 
     let ref_name = format!("refs/heads/{}", target_branch);
-    let output = git
-        .run(&["worktree", "add", path_str, &ref_name])
-        .await?;
+    let output = git.run(&["worktree", "add", path_str, &ref_name]).await?;
 
     if !output.success() {
         tracing::error!(
@@ -174,13 +169,11 @@ pub async fn merge_pr(
     // -----------------------------------------------------------------------
     // Step 1: Load PR and validate status
     // -----------------------------------------------------------------------
-    let pr = sqlx::query_as::<_, PullRequest>(
-        r#"SELECT * FROM pull_requests WHERE id = $1"#,
-    )
-    .bind(pr_id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
+    let pr = sqlx::query_as::<_, PullRequest>(r#"SELECT * FROM pull_requests WHERE id = $1"#)
+        .bind(pr_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
 
     let repo_id = pr.repo_id;
 
@@ -204,16 +197,14 @@ pub async fn merge_pr(
     let lock_key = advisory_lock_key(repo_id, &pr.target_branch);
 
     // Try to acquire the lock without blocking.
-    let lock_acquired: (bool,) = sqlx::query_as(
-        "SELECT pg_try_advisory_xact_lock($1)",
-    )
-    .bind(lock_key)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| {
-        tracing::error!(error = %e, "failed to acquire advisory lock");
-        ApiError::Internal("failed to acquire merge lock".to_string())
-    })?;
+    let lock_acquired: (bool,) = sqlx::query_as("SELECT pg_try_advisory_xact_lock($1)")
+        .bind(lock_key)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "failed to acquire advisory lock");
+            ApiError::Internal("failed to acquire merge lock".to_string())
+        })?;
 
     if !lock_acquired.0 {
         return Err(ApiError::Conflict(
@@ -316,19 +307,31 @@ pub async fn merge_pr(
     let merge_sha = match strategy {
         MergeStrategy::MergeCommit => {
             strategies::execute_merge_commit(
-                &git, &wt_path, &pr.source_branch, &pr.target_branch, &msg,
+                &git,
+                &wt_path,
+                &pr.source_branch,
+                &pr.target_branch,
+                &msg,
             )
             .await
         }
         MergeStrategy::Squash => {
             strategies::execute_squash_merge(
-                &git, &wt_path, &pr.source_branch, &pr.target_branch, &msg,
+                &git,
+                &wt_path,
+                &pr.source_branch,
+                &pr.target_branch,
+                &msg,
             )
             .await
         }
         MergeStrategy::RebaseAndMerge => {
             strategies::execute_rebase_and_merge(
-                &git, &wt_path, &pr.source_branch, &pr.target_branch, &msg,
+                &git,
+                &wt_path,
+                &pr.source_branch,
+                &pr.target_branch,
+                &msg,
             )
             .await
         }
@@ -347,9 +350,7 @@ pub async fn merge_pr(
         Err(MergeError::Internal(msg)) => {
             cleanup_worktree(&git, &wt_path).await;
             tracing::error!(error = %msg, "merge operation failed");
-            return Err(ApiError::Internal(
-                "merge operation failed".to_string(),
-            ));
+            return Err(ApiError::Internal("merge operation failed".to_string()));
         }
     };
 
@@ -474,9 +475,7 @@ pub async fn check_conflicts(
     }
 
     // Find the merge base.
-    let merge_base_output = git
-        .run(&["merge-base", &target_ref, &source_ref])
-        .await?;
+    let merge_base_output = git.run(&["merge-base", &target_ref, &source_ref]).await?;
 
     if !merge_base_output.success() {
         // No common ancestor -- treat as conflicting.

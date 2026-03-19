@@ -50,12 +50,9 @@ impl std::fmt::Display for Visibility {
 
 // sqlx encoding/decoding: store as TEXT matching the DB varchar column.
 impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Visibility {
-    fn decode(
-        value: sqlx::postgres::PgValueRef<'r>,
-    ) -> Result<Self, sqlx::error::BoxDynError> {
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let s = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
-        Visibility::from_db_str(s)
-            .ok_or_else(|| format!("unknown visibility: {}", s).into())
+        Visibility::from_db_str(s).ok_or_else(|| format!("unknown visibility: {}", s).into())
     }
 }
 
@@ -184,9 +181,7 @@ impl Default for Pagination {
 // ---------------------------------------------------------------------------
 
 /// Reserved slug names that cannot be used for repositories.
-const RESERVED_SLUGS: &[&str] = &[
-    "settings", "admin", "new", "api", "auth", "login",
-];
+const RESERVED_SLUGS: &[&str] = &["settings", "admin", "new", "api", "auth", "login"];
 
 /// Generate a URL-friendly slug from a repository name.
 ///

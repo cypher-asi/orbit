@@ -19,10 +19,7 @@ const RECORD_SEP: &str = "\x1e";
 /// Format: sha, author_name, author_email, committer_name, committer_email,
 ///         subject (%s), author date ISO, parent shas (space-separated).
 fn log_format() -> String {
-    format!(
-        "{}%H%n%an%n%ae%n%cn%n%ce%n%s%n%aI%n%P",
-        RECORD_SEP
-    )
+    format!("{}%H%n%an%n%ae%n%cn%n%ce%n%s%n%aI%n%P", RECORD_SEP)
 }
 
 /// Parse a single commit record (the 8 lines produced by the format string)
@@ -51,10 +48,7 @@ fn parse_commit_record(record: &str) -> Option<CommitInfo> {
 
     // Parent SHAs are on line 7 (may be empty for root commit)
     let parent_shas = if lines.len() > 7 && !lines[7].is_empty() {
-        lines[7]
-            .split(' ')
-            .map(|s| s.to_string())
-            .collect()
+        lines[7].split(' ').map(|s| s.to_string()).collect()
     } else {
         Vec::new()
     };
@@ -94,13 +88,7 @@ pub async fn list_commits(
     let skip_arg = format!("--skip={}", offset);
 
     let output = git
-        .run(&[
-            "log",
-            &format_arg,
-            &limit_arg,
-            &skip_arg,
-            ref_name,
-        ])
+        .run(&["log", &format_arg, &limit_arg, &skip_arg, ref_name])
         .await?;
 
     if !output.success() {
@@ -151,9 +139,7 @@ pub async fn get_commit(
 
     let format_arg = format!("--format={}", log_format());
 
-    let output = git
-        .run(&["show", "--no-patch", &format_arg, sha])
-        .await?;
+    let output = git.run(&["show", "--no-patch", &format_arg, sha]).await?;
 
     if !output.success() {
         return Ok(None);
@@ -192,16 +178,20 @@ pub async fn get_commit_diff(
     // The --root flag is needed so that the initial commit (no parent)
     // still shows its added files.
     let numstat_output = git
-        .run(&["diff-tree", "-r", "--root", "--numstat", "--no-commit-id", sha])
+        .run(&[
+            "diff-tree",
+            "-r",
+            "--root",
+            "--numstat",
+            "--no-commit-id",
+            sha,
+        ])
         .await?;
 
     if !numstat_output.success() {
         let stderr = &numstat_output.stderr;
         if stderr.contains("unknown revision") || stderr.contains("bad object") {
-            return Err(ApiError::NotFound(format!(
-                "commit '{}' not found",
-                sha
-            )));
+            return Err(ApiError::NotFound(format!("commit '{}' not found", sha)));
         }
         tracing::warn!(
             repo_id = %repo_id,
@@ -313,9 +303,7 @@ pub async fn list_tree(
         _ => ref_name.to_string(),
     };
 
-    let output = git
-        .run(&["ls-tree", "-l", &tree_ish])
-        .await?;
+    let output = git.run(&["ls-tree", "-l", &tree_ish]).await?;
 
     if !output.success() {
         let stderr = &output.stderr;
@@ -415,9 +403,7 @@ pub async fn get_file_content(
     let object_spec = format!("{}:{}", ref_name, path);
 
     // First, check the object size via cat-file to enforce limit.
-    let size_output = git
-        .run(&["cat-file", "-s", &object_spec])
-        .await?;
+    let size_output = git.run(&["cat-file", "-s", &object_spec]).await?;
 
     if !size_output.success() {
         let stderr = &size_output.stderr;
@@ -445,9 +431,7 @@ pub async fn get_file_content(
     }
 
     // Retrieve the file content.
-    let output = git
-        .run(&["show", &object_spec])
-        .await?;
+    let output = git.run(&["show", &object_spec]).await?;
 
     if !output.success() {
         let stderr = &output.stderr;
@@ -501,14 +485,10 @@ mod tests {
     }
 
     /// Create a bare repo and add an initial commit so we can query history.
-    async fn setup_repo_with_commit(
-        storage: &StorageConfig,
-        repo_id: Uuid,
-    ) -> PathBuf {
-        let path =
-            crate::storage::service::init_bare_repo(storage, repo_id, "main")
-                .await
-                .expect("failed to init bare repo");
+    async fn setup_repo_with_commit(storage: &StorageConfig, repo_id: Uuid) -> PathBuf {
+        let path = crate::storage::service::init_bare_repo(storage, repo_id, "main")
+            .await
+            .expect("failed to init bare repo");
 
         let tmp_clone = path.parent().unwrap().join("tmp-clone");
         tokio::fs::create_dir_all(&tmp_clone)
@@ -521,8 +501,7 @@ mod tests {
             .await
             .expect("git clone");
         assert!(
-            output.status.success()
-                || String::from_utf8_lossy(&output.stderr).contains("empty")
+            output.status.success() || String::from_utf8_lossy(&output.stderr).contains("empty")
         );
 
         tokio::process::Command::new("git")
@@ -579,14 +558,10 @@ mod tests {
     }
 
     /// Create a repo with two commits (initial + a modification).
-    async fn setup_repo_with_two_commits(
-        storage: &StorageConfig,
-        repo_id: Uuid,
-    ) -> PathBuf {
-        let path =
-            crate::storage::service::init_bare_repo(storage, repo_id, "main")
-                .await
-                .expect("failed to init bare repo");
+    async fn setup_repo_with_two_commits(storage: &StorageConfig, repo_id: Uuid) -> PathBuf {
+        let path = crate::storage::service::init_bare_repo(storage, repo_id, "main")
+            .await
+            .expect("failed to init bare repo");
 
         let tmp_clone = path.parent().unwrap().join("tmp-clone2");
         tokio::fs::create_dir_all(&tmp_clone)
@@ -599,8 +574,7 @@ mod tests {
             .await
             .expect("git clone");
         assert!(
-            output.status.success()
-                || String::from_utf8_lossy(&output.stderr).contains("empty")
+            output.status.success() || String::from_utf8_lossy(&output.stderr).contains("empty")
         );
 
         tokio::process::Command::new("git")
@@ -815,13 +789,9 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let commit = get_commit(
-            &storage,
-            id,
-            "0000000000000000000000000000000000000000",
-        )
-        .await
-        .unwrap();
+        let commit = get_commit(&storage, id, "0000000000000000000000000000000000000000")
+            .await
+            .unwrap();
         assert!(commit.is_none());
     }
 
@@ -875,12 +845,8 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let result = get_commit_diff(
-            &storage,
-            id,
-            "0000000000000000000000000000000000000000",
-        )
-        .await;
+        let result =
+            get_commit_diff(&storage, id, "0000000000000000000000000000000000000000").await;
         assert!(result.is_err());
     }
 
@@ -890,14 +856,10 @@ mod tests {
     ///   src/
     ///     main.rs
     ///     lib.rs
-    async fn setup_repo_with_tree(
-        storage: &StorageConfig,
-        repo_id: Uuid,
-    ) -> PathBuf {
-        let path =
-            crate::storage::service::init_bare_repo(storage, repo_id, "main")
-                .await
-                .expect("failed to init bare repo");
+    async fn setup_repo_with_tree(storage: &StorageConfig, repo_id: Uuid) -> PathBuf {
+        let path = crate::storage::service::init_bare_repo(storage, repo_id, "main")
+            .await
+            .expect("failed to init bare repo");
 
         let tmp_clone = path.parent().unwrap().join("tmp-clone-tree");
         tokio::fs::create_dir_all(&tmp_clone)
@@ -910,8 +872,7 @@ mod tests {
             .await
             .expect("git clone");
         assert!(
-            output.status.success()
-                || String::from_utf8_lossy(&output.stderr).contains("empty")
+            output.status.success() || String::from_utf8_lossy(&output.stderr).contains("empty")
         );
 
         tokio::process::Command::new("git")
@@ -1146,10 +1107,9 @@ mod tests {
         let storage = test_storage(tmp.path());
         let id = Uuid::new_v4();
 
-        let path =
-            crate::storage::service::init_bare_repo(&storage, id, "main")
-                .await
-                .expect("failed to init bare repo");
+        let path = crate::storage::service::init_bare_repo(&storage, id, "main")
+            .await
+            .expect("failed to init bare repo");
 
         let tmp_clone = path.parent().unwrap().join("tmp-clone-bin");
         tokio::fs::create_dir_all(&tmp_clone)
@@ -1162,8 +1122,7 @@ mod tests {
             .await
             .expect("git clone");
         assert!(
-            output.status.success()
-                || String::from_utf8_lossy(&output.stderr).contains("empty")
+            output.status.success() || String::from_utf8_lossy(&output.stderr).contains("empty")
         );
 
         tokio::process::Command::new("git")

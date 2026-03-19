@@ -11,10 +11,7 @@ use super::models::TagInfo;
 /// Runs `git for-each-ref --format='%(refname:short) %(objectname) %(*objectname)' refs/tags/`
 /// and parses the output. Returns tags in refname order (typically lexicographic).
 /// For pagination, the caller should slice the returned Vec (e.g. [offset..][..limit]).
-pub async fn list_tags(
-    storage: &StorageConfig,
-    repo_id: Uuid,
-) -> Result<Vec<TagInfo>, ApiError> {
+pub async fn list_tags(storage: &StorageConfig, repo_id: Uuid) -> Result<Vec<TagInfo>, ApiError> {
     let path = repo_path(storage, repo_id);
     let git = GitCommand::new(path);
 
@@ -29,9 +26,7 @@ pub async fn list_tags(
 
     if !output.success() {
         tracing::error!(stderr = %output.stderr, "git for-each-ref refs/tags failed");
-        return Err(ApiError::Internal(
-            "failed to list tags".to_string(),
-        ));
+        return Err(ApiError::Internal("failed to list tags".to_string()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);

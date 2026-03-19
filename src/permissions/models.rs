@@ -43,12 +43,9 @@ impl std::fmt::Display for Role {
 
 // sqlx encoding/decoding: store as TEXT matching the DB varchar column.
 impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Role {
-    fn decode(
-        value: sqlx::postgres::PgValueRef<'r>,
-    ) -> Result<Self, sqlx::error::BoxDynError> {
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let s = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
-        Role::from_db_str(s)
-            .ok_or_else(|| format!("unknown role: {}", s).into())
+        Role::from_db_str(s).ok_or_else(|| format!("unknown role: {}", s).into())
     }
 }
 
@@ -108,12 +105,9 @@ pub struct RepoMember {
     pub display_name: Option<String>,
 }
 
-/// Minimal repo row used internally by permission checks.
-/// Not exported as a public API response type.
+/// Minimal repo row used internally by permission checks (visibility and archived only).
 #[derive(Debug, Clone, sqlx::FromRow)]
-pub(crate) struct RepoRow {
-    pub id: Uuid,
-    pub owner_id: Uuid,
+pub(crate) struct RepoAccessRow {
     pub visibility: String,
     pub archived: bool,
 }

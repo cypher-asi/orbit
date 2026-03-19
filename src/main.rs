@@ -32,8 +32,7 @@ async fn main() {
     events::logging::init_logging(&config.log_level);
 
     tracing::info!("Creating database connection pool");
-    let pool = db::create_pool(&config.database_url)
-        .expect("Failed to create database pool");
+    let pool = db::create_pool(&config.database_url).expect("Failed to create database pool");
 
     // Attempt to run database migrations; log a warning if the database
     // is not yet reachable so the server can still start for health checks.
@@ -52,8 +51,7 @@ async fn main() {
     // Ensure git storage root directory exists
     let git_storage_path = std::path::Path::new(&config.git_storage_root);
     if !git_storage_path.exists() {
-        fs::create_dir_all(git_storage_path)
-            .expect("Failed to create git storage root directory");
+        fs::create_dir_all(git_storage_path).expect("Failed to create git storage root directory");
         tracing::info!(path = %config.git_storage_root, "Created git storage root directory");
     }
 
@@ -87,9 +85,8 @@ async fn main() {
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     // Spawn the background job worker.
-    let worker_storage = storage::service::StorageConfig::new(
-        PathBuf::from(&config.git_storage_root),
-    );
+    let worker_storage =
+        storage::service::StorageConfig::new(PathBuf::from(&config.git_storage_root));
     let worker_handle = tokio::spawn(jobs::worker::run_worker(
         worker_pool,
         worker_storage,
@@ -97,15 +94,14 @@ async fn main() {
     ));
 
     // Run the HTTP server with graceful shutdown on Ctrl+C.
-    let server = axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("Failed to listen for Ctrl+C");
-            tracing::info!("received Ctrl+C, initiating graceful shutdown");
-            // Signal the worker to stop.
-            let _ = shutdown_tx.send(true);
-        });
+    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to listen for Ctrl+C");
+        tracing::info!("received Ctrl+C, initiating graceful shutdown");
+        // Signal the worker to stop.
+        let _ = shutdown_tx.send(true);
+    });
 
     server.await.expect("Server error");
 

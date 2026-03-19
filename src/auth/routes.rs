@@ -109,12 +109,14 @@ async fn create_token_handler(
     Json(body): Json<CreateTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateTokenResponse>), ApiError> {
     if body.name.is_empty() {
-        return Err(ApiError::BadRequest("token name must not be empty".to_string()));
+        return Err(ApiError::BadRequest(
+            "token name must not be empty".to_string(),
+        ));
     }
 
-    let expires_in = body.expires_in_days.map(|days| {
-        std::time::Duration::from_secs(u64::from(days) * 24 * 60 * 60)
-    });
+    let expires_in = body
+        .expires_in_days
+        .map(|days| std::time::Duration::from_secs(u64::from(days) * 24 * 60 * 60));
 
     let (raw_token, auth_token) =
         service::create_token(&state.db, authed.id, &body.name, expires_in).await?;
@@ -189,8 +191,7 @@ pub fn auth_token_read_routes() -> Router<AppState> {
 /// rate limiting selectively to the login endpoint without affecting the
 /// authenticated PAT management routes.
 pub fn auth_login_routes() -> Router<AppState> {
-    Router::new()
-        .route("/auth/login", post(login_handler))
+    Router::new().route("/auth/login", post(login_handler))
 }
 
 /// Return a function reference for the create-token handler.

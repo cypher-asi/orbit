@@ -23,9 +23,7 @@ impl FromRequestParts<AppState> for AdminUser {
         let AuthUser(user) = AuthUser::from_request_parts(parts, state).await?;
 
         if !user.is_admin {
-            return Err(ApiError::Forbidden(
-                "admin access required".to_string(),
-            ));
+            return Err(ApiError::Forbidden("admin access required".to_string()));
         }
 
         Ok(AdminUser(user))

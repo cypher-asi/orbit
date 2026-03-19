@@ -133,7 +133,10 @@ mod tests {
     fn merge_strategy_display() {
         assert_eq!(MergeStrategy::MergeCommit.to_string(), "merge_commit");
         assert_eq!(MergeStrategy::Squash.to_string(), "squash");
-        assert_eq!(MergeStrategy::RebaseAndMerge.to_string(), "rebase_and_merge");
+        assert_eq!(
+            MergeStrategy::RebaseAndMerge.to_string(),
+            "rebase_and_merge"
+        );
     }
 
     // -- MergeResult tests --------------------------------------------------

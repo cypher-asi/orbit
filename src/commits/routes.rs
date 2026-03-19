@@ -108,13 +108,7 @@ async fn list_commits(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let ref_name = query
         .ref_name
@@ -125,8 +119,7 @@ async fn list_commits(
     let offset = query.offset.unwrap_or(0);
 
     let sc = storage_config(&state);
-    let commits =
-        commit_service::list_commits(&sc, repo.id, &ref_name, limit, offset).await?;
+    let commits = commit_service::list_commits(&sc, repo.id, &ref_name, limit, offset).await?;
 
     Ok(Json(commits))
 }
@@ -141,20 +134,12 @@ async fn get_commit(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let sc = storage_config(&state);
     let commit = commit_service::get_commit(&sc, repo.id, &path.sha)
         .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("commit '{}' not found", path.sha))
-        })?;
+        .ok_or_else(|| ApiError::NotFound(format!("commit '{}' not found", path.sha)))?;
 
     Ok(Json(commit))
 }
@@ -169,13 +154,7 @@ async fn browse_tree(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let tree_path = if path.path.is_empty() {
         None
@@ -184,8 +163,7 @@ async fn browse_tree(
     };
 
     let sc = storage_config(&state);
-    let entries =
-        commit_service::list_tree(&sc, repo.id, &path.ref_name, tree_path).await?;
+    let entries = commit_service::list_tree(&sc, repo.id, &path.ref_name, tree_path).await?;
 
     Ok(Json(entries))
 }
@@ -200,13 +178,7 @@ async fn get_blob(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     if path.path.is_empty() {
         return Err(ApiError::BadRequest("path is required".to_string()));
@@ -214,8 +186,7 @@ async fn get_blob(
 
     let sc = storage_config(&state);
     let content =
-        commit_service::get_file_content(&sc, repo.id, &path.ref_name, &path.path)
-            .await?;
+        commit_service::get_file_content(&sc, repo.id, &path.ref_name, &path.path).await?;
 
     Ok(Json(content))
 }
@@ -230,13 +201,7 @@ async fn get_commit_diff(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let sc = storage_config(&state);
     let diff = commit_service::get_commit_diff(&sc, repo.id, &path.sha).await?;
@@ -258,26 +223,14 @@ async fn get_commit_diff(
 /// - `GET /repos/{owner}/{repo}/blob/{ref}/{*path}`    -- get file content
 pub fn commits_routes() -> Router<AppState> {
     Router::new()
-        .route(
-            "/repos/{owner}/{repo}/commits",
-            get(list_commits),
-        )
+        .route("/repos/{owner}/{repo}/commits", get(list_commits))
         // Note: the diff route must come before the {sha} route so that
         // `{sha}/diff` is matched correctly by axum.
         .route(
             "/repos/{owner}/{repo}/commits/{sha}/diff",
             get(get_commit_diff),
         )
-        .route(
-            "/repos/{owner}/{repo}/commits/{sha}",
-            get(get_commit),
-        )
-        .route(
-            "/repos/{owner}/{repo}/tree/{ref}/{*path}",
-            get(browse_tree),
-        )
-        .route(
-            "/repos/{owner}/{repo}/blob/{ref}/{*path}",
-            get(get_blob),
-        )
+        .route("/repos/{owner}/{repo}/commits/{sha}", get(get_commit))
+        .route("/repos/{owner}/{repo}/tree/{ref}/{*path}", get(browse_tree))
+        .route("/repos/{owner}/{repo}/blob/{ref}/{*path}", get(get_blob))
 }

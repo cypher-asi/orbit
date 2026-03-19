@@ -108,11 +108,7 @@ pub async fn run_worker(
 }
 
 /// Dispatch a job to the appropriate handler based on its `job_type`.
-async fn execute_job(
-    _pool: &PgPool,
-    storage: &StorageConfig,
-    job: &Job,
-) -> Result<(), ApiError> {
+async fn execute_job(_pool: &PgPool, storage: &StorageConfig, job: &Job) -> Result<(), ApiError> {
     match job.job_type.as_str() {
         "cleanup_worktree" => handle_cleanup_worktree(storage, job).await,
         "delete_repo_storage" => handle_delete_repo_storage(storage, job).await,
@@ -128,10 +124,7 @@ async fn execute_job(
 ///
 /// Expects `payload.path` to contain the worktree directory path to remove.
 /// If the path does not exist, the job succeeds silently (idempotent).
-async fn handle_cleanup_worktree(
-    storage: &StorageConfig,
-    job: &Job,
-) -> Result<(), ApiError> {
+async fn handle_cleanup_worktree(storage: &StorageConfig, job: &Job) -> Result<(), ApiError> {
     let path_str = job
         .payload
         .get("path")
@@ -159,14 +152,16 @@ async fn handle_cleanup_worktree(
         return Ok(());
     }
 
-    tokio::fs::remove_dir_all(&worktree_path).await.map_err(|e| {
-        tracing::error!(
-            error = %e,
-            path = %worktree_path.display(),
-            "failed to remove worktree directory"
-        );
-        ApiError::Internal(format!("failed to remove worktree: {}", e))
-    })?;
+    tokio::fs::remove_dir_all(&worktree_path)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                error = %e,
+                path = %worktree_path.display(),
+                "failed to remove worktree directory"
+            );
+            ApiError::Internal(format!("failed to remove worktree: {}", e))
+        })?;
 
     tracing::info!(
         job_id = %job.id,
@@ -181,23 +176,18 @@ async fn handle_cleanup_worktree(
 ///
 /// Expects `payload.repo_id` to contain the UUID of the repository whose
 /// on-disk storage should be deleted.
-async fn handle_delete_repo_storage(
-    storage: &StorageConfig,
-    job: &Job,
-) -> Result<(), ApiError> {
+async fn handle_delete_repo_storage(storage: &StorageConfig, job: &Job) -> Result<(), ApiError> {
     let repo_id_str = job
         .payload
         .get("repo_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            ApiError::Internal(
-                "delete_repo_storage job missing 'repo_id' in payload".to_string(),
-            )
+            ApiError::Internal("delete_repo_storage job missing 'repo_id' in payload".to_string())
         })?;
 
-    let repo_id: Uuid = repo_id_str.parse().map_err(|_| {
-        ApiError::Internal(format!("invalid repo_id in payload: {}", repo_id_str))
-    })?;
+    let repo_id: Uuid = repo_id_str
+        .parse()
+        .map_err(|_| ApiError::Internal(format!("invalid repo_id in payload: {}", repo_id_str)))?;
 
     crate::storage::service::delete_repo(storage, repo_id).await?;
 
@@ -214,23 +204,18 @@ async fn handle_delete_repo_storage(
 ///
 /// Expects `payload.repo_id` to contain the UUID of the repository on
 /// which to run `git gc`.
-async fn handle_repo_maintenance(
-    storage: &StorageConfig,
-    job: &Job,
-) -> Result<(), ApiError> {
+async fn handle_repo_maintenance(storage: &StorageConfig, job: &Job) -> Result<(), ApiError> {
     let repo_id_str = job
         .payload
         .get("repo_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            ApiError::Internal(
-                "repo_maintenance job missing 'repo_id' in payload".to_string(),
-            )
+            ApiError::Internal("repo_maintenance job missing 'repo_id' in payload".to_string())
         })?;
 
-    let repo_id: Uuid = repo_id_str.parse().map_err(|_| {
-        ApiError::Internal(format!("invalid repo_id in payload: {}", repo_id_str))
-    })?;
+    let repo_id: Uuid = repo_id_str
+        .parse()
+        .map_err(|_| ApiError::Internal(format!("invalid repo_id in payload: {}", repo_id_str)))?;
 
     let repo_path = crate::storage::service::repo_path(storage, repo_id);
 

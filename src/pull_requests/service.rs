@@ -6,7 +6,9 @@ use crate::storage;
 use crate::storage::git::GitCommand;
 use crate::storage::service::{repo_path, StorageConfig};
 
-use super::models::{CreatePrInput, MergeabilityState, PrFilter, PrStatus, PullRequest, UpdatePrInput};
+use super::models::{
+    CreatePrInput, MergeabilityState, PrFilter, PrStatus, PullRequest, UpdatePrInput,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,37 +130,12 @@ pub async fn create_pr(
     Ok(pr)
 }
 
-/// Get a single pull request by repo ID and PR number.
-pub async fn get_pr(
-    pool: &PgPool,
-    repo_id: Uuid,
-    number: i32,
-) -> Result<Option<PullRequest>, ApiError> {
-    let pr = sqlx::query_as::<_, PullRequest>(
-        r#"
-        SELECT * FROM pull_requests
-        WHERE repo_id = $1 AND number = $2
-        "#,
-    )
-    .bind(repo_id)
-    .bind(number)
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(pr)
-}
-
 /// Get a single pull request by its UUID id.
-pub async fn get_pr_by_id(
-    pool: &PgPool,
-    id: Uuid,
-) -> Result<Option<PullRequest>, ApiError> {
-    let pr = sqlx::query_as::<_, PullRequest>(
-        r#"SELECT * FROM pull_requests WHERE id = $1"#,
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
+pub async fn get_pr_by_id(pool: &PgPool, id: Uuid) -> Result<Option<PullRequest>, ApiError> {
+    let pr = sqlx::query_as::<_, PullRequest>(r#"SELECT * FROM pull_requests WHERE id = $1"#)
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
 
     Ok(pr)
 }
@@ -244,19 +221,13 @@ pub async fn update_pr(
 ///
 /// Only PRs with status `open` can be closed. Returns an error if the PR
 /// is already closed or has been merged.
-pub async fn close_pr(
-    pool: &PgPool,
-    pr_id: Uuid,
-    actor_id: Uuid,
-) -> Result<PullRequest, ApiError> {
+pub async fn close_pr(pool: &PgPool, pr_id: Uuid, actor_id: Uuid) -> Result<PullRequest, ApiError> {
     // Fetch the current PR to validate status transition.
-    let current = sqlx::query_as::<_, PullRequest>(
-        r#"SELECT * FROM pull_requests WHERE id = $1"#,
-    )
-    .bind(pr_id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
+    let current = sqlx::query_as::<_, PullRequest>(r#"SELECT * FROM pull_requests WHERE id = $1"#)
+        .bind(pr_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
 
     match current.status {
         PrStatus::Open => { /* valid transition */ }
@@ -313,13 +284,11 @@ pub async fn reopen_pr(
     actor_id: Uuid,
 ) -> Result<PullRequest, ApiError> {
     // Fetch the current PR to validate status transition.
-    let current = sqlx::query_as::<_, PullRequest>(
-        r#"SELECT * FROM pull_requests WHERE id = $1"#,
-    )
-    .bind(pr_id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
+    let current = sqlx::query_as::<_, PullRequest>(r#"SELECT * FROM pull_requests WHERE id = $1"#)
+        .bind(pr_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("pull request not found".to_string()))?;
 
     match current.status {
         PrStatus::Closed => { /* valid transition */ }
@@ -438,9 +407,7 @@ pub async fn check_mergeability(
     }
 
     // Find the merge-base between target and source.
-    let merge_base_output = git
-        .run(&["merge-base", &target_ref, &source_ref])
-        .await?;
+    let merge_base_output = git.run(&["merge-base", &target_ref, &source_ref]).await?;
 
     if !merge_base_output.success() {
         // No common ancestor found -- branches are unrelated.

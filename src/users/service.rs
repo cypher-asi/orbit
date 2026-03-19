@@ -1,8 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::errors::ApiError;
 use super::models::{CreateUserInput, UpdateUserInput, User};
+use crate::errors::ApiError;
 
 /// Create a new user and return the inserted row.
 ///
@@ -64,16 +64,6 @@ pub async fn get_user_by_username(pool: &PgPool, username: &str) -> Result<Optio
     Ok(user)
 }
 
-/// Look up a user by their unique email address.
-pub async fn get_user_by_email(pool: &PgPool, email: &str) -> Result<Option<User>, ApiError> {
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
-        .bind(email)
-        .fetch_optional(pool)
-        .await?;
-
-    Ok(user)
-}
-
 /// Update a user's profile fields. Only the fields that are `Some` in
 /// `input` will be changed; `None` fields are left untouched.
 ///
@@ -118,18 +108,13 @@ pub async fn update_user(
 
 /// List users with pagination (limit / offset), ordered by creation time
 /// (oldest first).
-pub async fn list_users(
-    pool: &PgPool,
-    limit: i64,
-    offset: i64,
-) -> Result<Vec<User>, ApiError> {
-    let users = sqlx::query_as::<_, User>(
-        "SELECT * FROM users ORDER BY created_at ASC LIMIT $1 OFFSET $2",
-    )
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
+pub async fn list_users(pool: &PgPool, limit: i64, offset: i64) -> Result<Vec<User>, ApiError> {
+    let users =
+        sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY created_at ASC LIMIT $1 OFFSET $2")
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
 
     Ok(users)
 }
@@ -167,12 +152,11 @@ pub async fn list_users_search(
 ///
 /// Returns `ApiError::NotFound` if the user does not exist.
 pub async fn disable_user(pool: &PgPool, id: Uuid) -> Result<(), ApiError> {
-    let result = sqlx::query(
-        "UPDATE users SET is_disabled = true, updated_at = now() WHERE id = $1",
-    )
-    .bind(id)
-    .execute(pool)
-    .await?;
+    let result =
+        sqlx::query("UPDATE users SET is_disabled = true, updated_at = now() WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await?;
 
     if result.rows_affected() == 0 {
         return Err(ApiError::NotFound("user not found".to_string()));
@@ -185,12 +169,11 @@ pub async fn disable_user(pool: &PgPool, id: Uuid) -> Result<(), ApiError> {
 ///
 /// Returns `ApiError::NotFound` if the user does not exist.
 pub async fn enable_user(pool: &PgPool, id: Uuid) -> Result<(), ApiError> {
-    let result = sqlx::query(
-        "UPDATE users SET is_disabled = false, updated_at = now() WHERE id = $1",
-    )
-    .bind(id)
-    .execute(pool)
-    .await?;
+    let result =
+        sqlx::query("UPDATE users SET is_disabled = false, updated_at = now() WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await?;
 
     if result.rows_affected() == 0 {
         return Err(ApiError::NotFound("user not found".to_string()));

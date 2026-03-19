@@ -74,13 +74,8 @@ pub async fn info_refs(
     }
 
     // Resolve the repository from the URL path.
-    let (repo, disk_path) = resolve_git_repo(
-        &state.db,
-        &state.git_storage_root,
-        &path.owner,
-        &path.repo,
-    )
-    .await?;
+    let (repo, disk_path) =
+        resolve_git_repo(&state.db, &state.git_storage_root, &path.owner, &path.repo).await?;
 
     // Authorization checks based on the service type.
     let viewer_id = user.as_ref().map(|u| u.id);
@@ -93,37 +88,23 @@ pub async fn info_refs(
                 // Private repo, no auth -> 404 to hide existence.
                 return Err(ApiError::NotFound("repository not found".to_string()));
             }
-            permissions_service::check_repo_access(
-                &state.db,
-                viewer_id,
-                repo.id,
-                Permission::Read,
-            )
-            .await?;
+            permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read)
+                .await?;
         }
         // Public repos: no auth check needed for read.
     } else {
         // git-receive-pack: always requires auth + write permission.
         if viewer_id.is_none() {
-            return Err(ApiError::Forbidden(
-                "authentication required".to_string(),
-            ));
+            return Err(ApiError::Forbidden("authentication required".to_string()));
         }
 
         // Check write permission (this also handles archived check).
-        permissions_service::check_repo_access(
-            &state.db,
-            viewer_id,
-            repo.id,
-            Permission::Write,
-        )
-        .await?;
+        permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Write)
+            .await?;
 
         // Explicitly check archived status for a clear error message.
         if repo.archived {
-            return Err(ApiError::Forbidden(
-                "repository is archived".to_string(),
-            ));
+            return Err(ApiError::Forbidden("repository is archived".to_string()));
         }
     }
 
@@ -147,7 +128,12 @@ pub async fn info_refs(
 
     let git_cmd = GitCommand::new(disk_path.clone());
     let output = git_cmd
-        .run(&[git_subcommand, "--stateless-rpc", "--advertise-refs", disk_path.to_str().unwrap_or(".")])
+        .run(&[
+            git_subcommand,
+            "--stateless-rpc",
+            "--advertise-refs",
+            disk_path.to_str().unwrap_or("."),
+        ])
         .await?;
 
     if !output.success() {
@@ -157,9 +143,7 @@ pub async fn info_refs(
             exit_code = output.exit_code,
             "git {} --advertise-refs failed", git_subcommand,
         );
-        return Err(ApiError::Internal(
-            "git command failed".to_string(),
-        ));
+        return Err(ApiError::Internal("git command failed".to_string()));
     }
 
     // Build the response body:
@@ -211,13 +195,8 @@ pub async fn upload_pack(
     body: Body,
 ) -> Result<Response, ApiError> {
     // Resolve the repository from the URL path.
-    let (repo, disk_path) = resolve_git_repo(
-        &state.db,
-        &state.git_storage_root,
-        &path.owner,
-        &path.repo,
-    )
-    .await?;
+    let (repo, disk_path) =
+        resolve_git_repo(&state.db, &state.git_storage_root, &path.owner, &path.repo).await?;
 
     // Authorization: public repos allow anonymous read; private repos
     // require auth + read permission.
@@ -228,13 +207,8 @@ pub async fn upload_pack(
             // Private repo, no auth -> 404 to hide existence.
             return Err(ApiError::NotFound("repository not found".to_string()));
         }
-        permissions_service::check_repo_access(
-            &state.db,
-            viewer_id,
-            repo.id,
-            Permission::Read,
-        )
-        .await?;
+        permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read)
+            .await?;
     }
 
     // Verify disk path exists.
@@ -267,9 +241,10 @@ pub async fn upload_pack(
         })?;
 
     // Take ownership of child stdin and pipe the request body into it.
-    let mut stdin = child.stdin.take().ok_or_else(|| {
-        ApiError::Internal("failed to open git process stdin".to_string())
-    })?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| ApiError::Internal("failed to open git process stdin".to_string()))?;
 
     // Spawn a task to write the request body to stdin.
     tokio::spawn(async move {
@@ -289,9 +264,10 @@ pub async fn upload_pack(
     });
 
     // Take ownership of stdout and stream it back as the response body.
-    let stdout = child.stdout.take().ok_or_else(|| {
-        ApiError::Internal("failed to open git process stdout".to_string())
-    })?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ApiError::Internal("failed to open git process stdout".to_string()))?;
 
     let stream = tokio_util::io::ReaderStream::new(stdout);
     let response_body = Body::from_stream(stream);
@@ -331,36 +307,22 @@ pub async fn receive_pack(
     body: Body,
 ) -> Result<Response, ApiError> {
     // Resolve the repository from the URL path.
-    let (repo, disk_path) = resolve_git_repo(
-        &state.db,
-        &state.git_storage_root,
-        &path.owner,
-        &path.repo,
-    )
-    .await?;
+    let (repo, disk_path) =
+        resolve_git_repo(&state.db, &state.git_storage_root, &path.owner, &path.repo).await?;
 
     // Authorization: always requires auth + write permission.
     let viewer_id = user.as_ref().map(|u| u.id);
 
     if viewer_id.is_none() {
-        return Err(ApiError::Forbidden(
-            "authentication required".to_string(),
-        ));
+        return Err(ApiError::Forbidden("authentication required".to_string()));
     }
 
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Write,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Write)
+        .await?;
 
     // Explicitly check archived status for a clear error message.
     if repo.archived {
-        return Err(ApiError::Forbidden(
-            "repository is archived".to_string(),
-        ));
+        return Err(ApiError::Forbidden("repository is archived".to_string()));
     }
 
     // Verify disk path exists.
@@ -393,9 +355,10 @@ pub async fn receive_pack(
         })?;
 
     // Take ownership of child stdin and pipe the request body into it.
-    let mut stdin = child.stdin.take().ok_or_else(|| {
-        ApiError::Internal("failed to open git process stdin".to_string())
-    })?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| ApiError::Internal("failed to open git process stdin".to_string()))?;
 
     // Spawn a task to write the request body to stdin.
     tokio::spawn(async move {
@@ -414,9 +377,10 @@ pub async fn receive_pack(
     });
 
     // Take ownership of stdout and stream it back as the response body.
-    let stdout = child.stdout.take().ok_or_else(|| {
-        ApiError::Internal("failed to open git process stdout".to_string())
-    })?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ApiError::Internal("failed to open git process stdout".to_string()))?;
 
     let stream = tokio_util::io::ReaderStream::new(stdout);
     let response_body = Body::from_stream(stream);
@@ -426,15 +390,7 @@ pub async fn receive_pack(
     let repo_id = repo.id;
     let db = state.db.clone();
     tokio::spawn(async move {
-        storage::emit_audit_event(
-            &db,
-            actor_id,
-            "push.received",
-            Some(repo_id),
-            None,
-            None,
-        )
-        .await;
+        storage::emit_audit_event(&db, actor_id, "push.received", Some(repo_id), None, None).await;
     });
 
     Ok((
@@ -474,6 +430,5 @@ pub fn git_read_routes() -> Router<AppState> {
 /// Mounts:
 /// - `POST /{owner}/{repo}/git-receive-pack` -- push pack receive
 pub fn git_receive_routes() -> Router<AppState> {
-    Router::new()
-        .route("/{owner}/{repo}/git-receive-pack", post(receive_pack))
+    Router::new().route("/{owner}/{repo}/git-receive-pack", post(receive_pack))
 }

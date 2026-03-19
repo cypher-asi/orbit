@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::errors::ApiError;
 
-use super::models::{Permission, RepoMember, RepoRow, Role};
+use super::models::{Permission, RepoAccessRow, RepoMember, Role};
 
 /// Check whether a user (or unauthenticated visitor) has the required
 /// permission level on a repository.
@@ -26,9 +26,9 @@ pub async fn check_repo_access(
     required: Permission,
 ) -> Result<(), ApiError> {
     // 1. Load the repo.
-    let repo = sqlx::query_as::<_, RepoRow>(
+    let repo = sqlx::query_as::<_, RepoAccessRow>(
         r#"
-        SELECT id, owner_id, visibility, archived
+        SELECT visibility, archived
         FROM repos
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -50,9 +50,7 @@ pub async fn check_repo_access(
         if is_admin {
             // Admins bypass all checks, but archived repos still block writes.
             if repo.archived && matches!(required, Permission::Write | Permission::Admin) {
-                return Err(ApiError::Forbidden(
-                    "repository is archived".to_string(),
-                ));
+                return Err(ApiError::Forbidden("repository is archived".to_string()));
             }
             return Ok(());
         }
@@ -69,9 +67,7 @@ pub async fn check_repo_access(
         None => {
             if is_public {
                 // Public repo but requires write/admin -- need authentication.
-                return Err(ApiError::Forbidden(
-                    "authentication required".to_string(),
-                ));
+                return Err(ApiError::Forbidden("authentication required".to_string()));
             }
             // Private repo -- hide existence.
             return Err(ApiError::NotFound("repository not found".to_string()));
@@ -89,9 +85,7 @@ pub async fn check_repo_access(
                 if required == Permission::Read {
                     return Ok(());
                 }
-                return Err(ApiError::Forbidden(
-                    "insufficient permissions".to_string(),
-                ));
+                return Err(ApiError::Forbidden("insufficient permissions".to_string()));
             }
             // Private repo, no membership -- hide existence.
             return Err(ApiError::NotFound("repository not found".to_string()));
@@ -99,15 +93,11 @@ pub async fn check_repo_access(
         Some(r) => {
             // 6. Check archived status before role check.
             if repo.archived && matches!(required, Permission::Write | Permission::Admin) {
-                return Err(ApiError::Forbidden(
-                    "repository is archived".to_string(),
-                ));
+                return Err(ApiError::Forbidden("repository is archived".to_string()));
             }
 
             if !r.has_permission(required) {
-                return Err(ApiError::Forbidden(
-                    "insufficient permissions".to_string(),
-                ));
+                return Err(ApiError::Forbidden("insufficient permissions".to_string()));
             }
         }
     }
@@ -258,10 +248,7 @@ pub async fn update_collaborator_role(
 }
 
 /// List all collaborators of a repository with their user info.
-pub async fn list_collaborators(
-    pool: &PgPool,
-    repo_id: Uuid,
-) -> Result<Vec<RepoMember>, ApiError> {
+pub async fn list_collaborators(pool: &PgPool, repo_id: Uuid) -> Result<Vec<RepoMember>, ApiError> {
     let members = sqlx::query_as::<_, RepoMember>(
         r#"
         SELECT rm.id, rm.repo_id, rm.user_id, rm.role, rm.created_at,
@@ -285,24 +272,21 @@ pub async fn list_collaborators(
 
 /// Helper: check if a user has the `is_admin` flag set.
 async fn is_user_admin(pool: &PgPool, user_id: Uuid) -> Result<bool, ApiError> {
-    let is_admin = sqlx::query_scalar::<_, bool>(
-        "SELECT is_admin FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        tracing::error!(error = %e, "is_user_admin: failed to query user");
-        ApiError::Internal("internal server error".to_string())
-    })?
-    .unwrap_or(false);
+    let is_admin = sqlx::query_scalar::<_, bool>("SELECT is_admin FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "is_user_admin: failed to query user");
+            ApiError::Internal("internal server error".to_string())
+        })?
+        .unwrap_or(false);
 
     Ok(is_admin)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::permissions::models::{Permission, Role};
 
     // Unit tests for role-permission logic (no DB needed).

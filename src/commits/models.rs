@@ -114,9 +114,18 @@ mod tests {
     #[test]
     fn diff_status_serializes() {
         assert_eq!(serde_json::to_value(&DiffStatus::Added).unwrap(), "added");
-        assert_eq!(serde_json::to_value(&DiffStatus::Modified).unwrap(), "modified");
-        assert_eq!(serde_json::to_value(&DiffStatus::Deleted).unwrap(), "deleted");
-        assert_eq!(serde_json::to_value(&DiffStatus::Renamed).unwrap(), "renamed");
+        assert_eq!(
+            serde_json::to_value(&DiffStatus::Modified).unwrap(),
+            "modified"
+        );
+        assert_eq!(
+            serde_json::to_value(&DiffStatus::Deleted).unwrap(),
+            "deleted"
+        );
+        assert_eq!(
+            serde_json::to_value(&DiffStatus::Renamed).unwrap(),
+            "renamed"
+        );
     }
 
     #[test]

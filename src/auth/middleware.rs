@@ -79,10 +79,7 @@ fn extract_raw_token(parts: &Parts) -> Result<Option<String>, ApiError> {
 
 /// Verify the raw token against the database and return an `AuthenticatedUser`
 /// if valid.
-async fn resolve_user(
-    state: &AppState,
-    raw_token: &str,
-) -> Result<AuthenticatedUser, ApiError> {
+async fn resolve_user(state: &AppState, raw_token: &str) -> Result<AuthenticatedUser, ApiError> {
     let user = super::service::verify_token(&state.db, raw_token)
         .await?
         .ok_or_else(|| ApiError::Unauthorized("invalid or expired token".to_string()))?;
@@ -121,9 +118,7 @@ impl FromRequestParts<AppState> for RequireAuth {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let raw_token = extract_raw_token(parts)?
-            .ok_or_else(|| {
-                ApiError::Unauthorized("missing authorization header".to_string())
-            })?;
+            .ok_or_else(|| ApiError::Unauthorized("missing authorization header".to_string()))?;
 
         let user = resolve_user(state, &raw_token).await?;
         Ok(RequireAuth(user))

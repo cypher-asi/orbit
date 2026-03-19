@@ -8,8 +8,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::auth::AdminUser;
 use crate::auth::middleware::RequireAuth;
+use crate::auth::AdminUser;
 use crate::errors::ApiError;
 use crate::permissions::models::Permission;
 use crate::permissions::service as permissions_service;
@@ -119,13 +119,8 @@ async fn repo_events(
         .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
 
     // Require Admin (owner) permission on the repo.
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Admin,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Admin)
+        .await?;
 
     let filter = EventFilter {
         actor_id: None,
@@ -161,8 +156,7 @@ pub fn admin_event_routes() -> Router<AppState> {
 /// Mounts:
 /// - `GET /repos/{owner}/{repo}/events` -- repo-scoped events
 pub fn repo_event_routes() -> Router<AppState> {
-    Router::new()
-        .route("/repos/{owner}/{repo}/events", get(repo_events))
+    Router::new().route("/repos/{owner}/{repo}/events", get(repo_events))
 }
 
 // ---------------------------------------------------------------------------

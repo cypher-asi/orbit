@@ -185,7 +185,9 @@ pub async fn get_branch(
         if !rp_output.success() {
             return Ok(None);
         }
-        String::from_utf8_lossy(&rp_output.stdout).trim().to_string()
+        String::from_utf8_lossy(&rp_output.stdout)
+            .trim()
+            .to_string()
     };
 
     Ok(Some(BranchInfo {
@@ -241,7 +243,9 @@ pub async fn create_branch(
     // Fetch the new branch's head commit.
     let rp_output = git.run(&["rev-parse", &ref_name]).await?;
     let sha = if rp_output.success() {
-        String::from_utf8_lossy(&rp_output.stdout).trim().to_string()
+        String::from_utf8_lossy(&rp_output.stdout)
+            .trim()
+            .to_string()
     } else {
         // The branch was just created, so this should not happen.
         String::new()
@@ -277,10 +281,7 @@ pub async fn delete_branch(
     let ref_name = format!("refs/heads/{}", name);
     let exists_output = git.run(&["show-ref", "--verify", &ref_name]).await?;
     if !exists_output.success() {
-        return Err(ApiError::NotFound(format!(
-            "branch '{}' not found",
-            name
-        )));
+        return Err(ApiError::NotFound(format!("branch '{}' not found", name)));
     }
 
     let output = git.run(&["branch", "-D", name]).await?;
@@ -298,40 +299,6 @@ pub async fn delete_branch(
     }
 
     Ok(())
-}
-
-/// Get the default branch for a repository.
-///
-/// Reads the `default_branch` column from the repo record in Postgres,
-/// then fetches branch info from Git. Returns `None` if the branch does
-/// not yet exist on disk (e.g. empty repo).
-pub async fn get_default_branch(
-    pool: &PgPool,
-    storage: &StorageConfig,
-    repo_id: Uuid,
-) -> Result<Option<BranchInfo>, ApiError> {
-    // Read the default_branch from the database.
-    let row: Option<(String,)> = sqlx::query_as(
-        r#"
-        SELECT default_branch FROM repos
-        WHERE id = $1 AND deleted_at IS NULL
-        "#,
-    )
-    .bind(repo_id)
-    .fetch_optional(pool)
-    .await?;
-
-    let default_branch = match row {
-        Some((branch,)) => branch,
-        None => {
-            return Err(ApiError::NotFound(
-                "repository not found".to_string(),
-            ));
-        }
-    };
-
-    // Fetch the branch info from Git.
-    get_branch(storage, repo_id, &default_branch, &default_branch).await
 }
 
 // ---------------------------------------------------------------------------
@@ -436,15 +403,11 @@ mod tests {
     }
 
     /// Create a bare repo and add an initial commit so branches can be created.
-    async fn setup_repo_with_commit(
-        storage: &StorageConfig,
-        repo_id: Uuid,
-    ) -> PathBuf {
+    async fn setup_repo_with_commit(storage: &StorageConfig, repo_id: Uuid) -> PathBuf {
         // Initialize bare repo using storage service
-        let path =
-            crate::storage::service::init_bare_repo(storage, repo_id, "main")
-                .await
-                .expect("failed to init bare repo");
+        let path = crate::storage::service::init_bare_repo(storage, repo_id, "main")
+            .await
+            .expect("failed to init bare repo");
 
         // Create an initial commit using a temporary clone
         let tmp_clone = path.parent().unwrap().join("tmp-clone");
@@ -459,7 +422,9 @@ mod tests {
             .await
             .expect("git clone");
         // Clone of empty repo may warn but should succeed
-        assert!(output.status.success() || String::from_utf8_lossy(&output.stderr).contains("empty"));
+        assert!(
+            output.status.success() || String::from_utf8_lossy(&output.stderr).contains("empty")
+        );
 
         // Configure git user in the clone
         tokio::process::Command::new("git")
@@ -557,9 +522,7 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let branch = get_branch(&storage, id, "main", "main")
-            .await
-            .unwrap();
+        let branch = get_branch(&storage, id, "main", "main").await.unwrap();
         assert!(branch.is_some());
         let info = branch.unwrap();
         assert_eq!(info.name, "main");
@@ -589,10 +552,9 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let new_branch =
-            create_branch(&storage, id, "feature/test", "main", "main")
-                .await
-                .unwrap();
+        let new_branch = create_branch(&storage, id, "feature/test", "main", "main")
+            .await
+            .unwrap();
         assert_eq!(new_branch.name, "feature/test");
         assert!(!new_branch.is_default);
         assert!(!new_branch.head_commit.is_empty());
@@ -612,8 +574,7 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let result =
-            create_branch(&storage, id, "main", "main", "main").await;
+        let result = create_branch(&storage, id, "main", "main", "main").await;
         assert!(result.is_err());
     }
 
@@ -625,12 +586,10 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let result =
-            create_branch(&storage, id, "bad branch", "main", "main").await;
+        let result = create_branch(&storage, id, "bad branch", "main", "main").await;
         assert!(result.is_err());
 
-        let result =
-            create_branch(&storage, id, "a..b", "main", "main").await;
+        let result = create_branch(&storage, id, "a..b", "main", "main").await;
         assert!(result.is_err());
     }
 
@@ -652,9 +611,7 @@ mod tests {
             .unwrap();
 
         // Verify it's gone.
-        let branch = get_branch(&storage, id, "to-delete", "main")
-            .await
-            .unwrap();
+        let branch = get_branch(&storage, id, "to-delete", "main").await.unwrap();
         assert!(branch.is_none());
     }
 
@@ -678,8 +635,7 @@ mod tests {
 
         setup_repo_with_commit(&storage, id).await;
 
-        let result =
-            delete_branch(&storage, id, "no-such-branch", "main").await;
+        let result = delete_branch(&storage, id, "no-such-branch", "main").await;
         assert!(result.is_err());
     }
 }

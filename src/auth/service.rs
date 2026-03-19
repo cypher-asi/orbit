@@ -25,17 +25,16 @@ pub async fn login(
     let generic_err = || ApiError::Unauthorized("invalid credentials".to_string());
 
     // Look up by username first, then by email.
-    let user: User = sqlx::query_as::<_, User>(
-        "SELECT * FROM users WHERE username = $1 OR email = $1 LIMIT 1",
-    )
-    .bind(username_or_email)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        tracing::error!(error = %e, "login: failed to query user");
-        generic_err()
-    })?
-    .ok_or_else(generic_err)?;
+    let user: User =
+        sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1 OR email = $1 LIMIT 1")
+            .bind(username_or_email)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "login: failed to query user");
+                generic_err()
+            })?
+            .ok_or_else(generic_err)?;
 
     // Reject disabled accounts.
     if user.is_disabled {
@@ -72,10 +71,8 @@ pub async fn create_token(
 ) -> Result<(String, AuthToken), ApiError> {
     let (raw_token, token_hash) = generate_token();
 
-    let expires_at = expires_in.map(|d| {
-        Utc::now()
-            + Duration::from_std(d).unwrap_or_else(|_| Duration::seconds(0))
-    });
+    let expires_at = expires_in
+        .map(|d| Utc::now() + Duration::from_std(d).unwrap_or_else(|_| Duration::seconds(0)));
 
     let auth_token = sqlx::query_as::<_, AuthToken>(
         r#"

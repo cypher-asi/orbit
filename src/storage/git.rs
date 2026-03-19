@@ -170,11 +170,7 @@ impl GitCommand {
     ///
     /// The caller is responsible for managing the child process lifetime,
     /// streaming data in/out, and waiting for completion.
-    pub async fn run_streaming(
-        &self,
-        args: &[&str],
-        _stdin_body: Body,
-    ) -> Result<Child, ApiError> {
+    pub async fn run_streaming(&self, args: &[&str], _stdin_body: Body) -> Result<Child, ApiError> {
         let child = Command::new("git")
             .args(args)
             .env("GIT_DIR", &self.repo_path)
@@ -293,11 +289,7 @@ mod tests {
         // Should produce a hex hash (40 chars for SHA-1, 64 for SHA-256).
         let stdout_str = String::from_utf8_lossy(&output.stdout);
         let hash = stdout_str.trim();
-        assert!(
-            hash.len() >= 40,
-            "expected a hex hash, got: {}",
-            hash
-        );
+        assert!(hash.len() >= 40, "expected a hex hash, got: {}", hash);
         assert!(
             hash.chars().all(|c| c.is_ascii_hexdigit()),
             "expected only hex characters, got: {}",
@@ -307,8 +299,8 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_is_configurable() {
-        let cmd = GitCommand::new(PathBuf::from("/tmp/test.git"))
-            .with_timeout(Duration::from_secs(60));
+        let cmd =
+            GitCommand::new(PathBuf::from("/tmp/test.git")).with_timeout(Duration::from_secs(60));
         assert_eq!(cmd.timeout, Duration::from_secs(60));
     }
 
@@ -319,8 +311,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let repo_path = tmp.path().join("nonexistent.git");
 
-        let cmd = GitCommand::new(repo_path)
-            .with_timeout(Duration::from_secs(5));
+        let cmd = GitCommand::new(repo_path).with_timeout(Duration::from_secs(5));
         let result = cmd.run(&["status"]).await;
         // Should complete (not hang) even though repo doesn't exist.
         // The command itself may error, but it should not timeout.

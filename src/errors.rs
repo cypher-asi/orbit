@@ -104,9 +104,7 @@ impl From<sqlx::Error> for ApiError {
         tracing::error!(error = %err, "database error");
 
         match err {
-            sqlx::Error::RowNotFound => {
-                ApiError::NotFound("resource not found".to_string())
-            }
+            sqlx::Error::RowNotFound => ApiError::NotFound("resource not found".to_string()),
             sqlx::Error::Database(ref db_err) => {
                 // PostgreSQL unique-violation SQLSTATE: 23505
                 if db_err.code().as_deref() == Some("23505") {
@@ -142,56 +140,80 @@ mod tests {
     async fn bad_request_response() {
         let (status, body) = error_to_parts(ApiError::BadRequest("invalid input".into())).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body, json!({"error": {"code": "VALIDATION_ERROR", "message": "invalid input", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "VALIDATION_ERROR", "message": "invalid input", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn unauthorized_response() {
         let (status, body) = error_to_parts(ApiError::Unauthorized("missing token".into())).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
-        assert_eq!(body, json!({"error": {"code": "UNAUTHORIZED", "message": "missing token", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "UNAUTHORIZED", "message": "missing token", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn forbidden_response() {
         let (status, body) = error_to_parts(ApiError::Forbidden("access denied".into())).await;
         assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(body, json!({"error": {"code": "FORBIDDEN", "message": "access denied", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "FORBIDDEN", "message": "access denied", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn not_found_response() {
         let (status, body) = error_to_parts(ApiError::NotFound("no such thing".into())).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body, json!({"error": {"code": "NOT_FOUND", "message": "no such thing", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "NOT_FOUND", "message": "no such thing", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn conflict_response() {
         let (status, body) = error_to_parts(ApiError::Conflict("already exists".into())).await;
         assert_eq!(status, StatusCode::CONFLICT);
-        assert_eq!(body, json!({"error": {"code": "CONFLICT", "message": "already exists", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "CONFLICT", "message": "already exists", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn unprocessable_response() {
         let (status, body) = error_to_parts(ApiError::Unprocessable("bad entity".into())).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body, json!({"error": {"code": "UNPROCESSABLE", "message": "bad entity", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "UNPROCESSABLE", "message": "bad entity", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn rate_limited_response() {
         let (status, body) = error_to_parts(ApiError::RateLimited("slow down".into())).await;
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
-        assert_eq!(body, json!({"error": {"code": "RATE_LIMITED", "message": "slow down", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "RATE_LIMITED", "message": "slow down", "details": null}})
+        );
     }
 
     #[tokio::test]
     async fn internal_response() {
         let (status, body) = error_to_parts(ApiError::Internal("something broke".into())).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body, json!({"error": {"code": "INTERNAL_ERROR", "message": "something broke", "details": null}}));
+        assert_eq!(
+            body,
+            json!({"error": {"code": "INTERNAL_ERROR", "message": "something broke", "details": null}})
+        );
     }
 
     #[tokio::test]

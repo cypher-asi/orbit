@@ -13,9 +13,9 @@ use super::health::health_check;
 use super::rate_limit::{
     admin_action_rate_limit_layer, admin_action_rate_limit_layer_redis, auth_rate_limit_layer,
     auth_rate_limit_layer_redis, git_receive_rate_limit_layer, git_receive_rate_limit_layer_redis,
-    repo_create_rate_limit_layer, repo_create_rate_limit_layer_redis,
-    repo_write_rate_limit_layer, repo_write_rate_limit_layer_redis, token_rate_limit_layer,
-    token_rate_limit_layer_redis, RateLimitLayer,
+    repo_create_rate_limit_layer, repo_create_rate_limit_layer_redis, repo_write_rate_limit_layer,
+    repo_write_rate_limit_layer_redis, token_rate_limit_layer, token_rate_limit_layer_redis,
+    RateLimitLayer,
 };
 
 // ---------------------------------------------------------------------------
@@ -98,8 +98,8 @@ impl RateLimitLayers {
 /// When `config.redis_url` is set, the rate limit layers use Redis as a shared
 /// backend for consistent rate limiting across multiple server instances.
 fn auth_routes(layers: &RateLimitLayers) -> Router<AppState> {
-    use axum::routing::post;
     use crate::users::routes::register;
+    use axum::routing::post;
 
     // Rate-limited routes: login and register (10/min per IP)
     // These are the most sensitive endpoints for brute-force protection.
@@ -114,17 +114,18 @@ fn auth_routes(layers: &RateLimitLayers) -> Router<AppState> {
     // Token creation requires authentication, so brute-force is less of a
     // concern, but we still rate-limit to prevent abuse.
     let rate_limited_tokens = Router::new()
-        .route("/auth/tokens", post(crate::auth::routes::create_token_handler_fn()))
+        .route(
+            "/auth/tokens",
+            post(crate::auth::routes::create_token_handler_fn()),
+        )
         .layer(layers.token.clone());
 
     // Non-rate-limited auth routes (token listing and revocation)
     // These require authentication and are read/delete operations.
-    let other_auth = Router::new()
-        .merge(crate::auth::routes::auth_token_read_routes());
+    let other_auth = Router::new().merge(crate::auth::routes::auth_token_read_routes());
 
     // User profile routes (GET/PATCH /users/me)
-    let user_profile = Router::new()
-        .merge(crate::users::routes::users_profile_routes());
+    let user_profile = Router::new().merge(crate::users::routes::users_profile_routes());
 
     Router::new()
         .merge(rate_limited_auth)
@@ -471,9 +472,7 @@ mod tests {
             server_port: 3000,
             git_storage_root: String::new(),
             log_level: String::new(),
-            cors_allowed_origins: vec![
-                "not a valid\norigin".to_string(),
-            ],
+            cors_allowed_origins: vec!["not a valid\norigin".to_string()],
             redis_url: None,
             public_base_url: None,
         };

@@ -62,10 +62,7 @@ pub struct PaginationParams {
 impl PaginationParams {
     /// Resolve the effective limit, clamped to [1, MAX_LIMIT].
     pub fn limit(&self) -> u32 {
-        self.limit
-            .unwrap_or(DEFAULT_LIMIT)
-            .max(1)
-            .min(MAX_LIMIT)
+        self.limit.unwrap_or(DEFAULT_LIMIT).max(1).min(MAX_LIMIT)
     }
 
     /// Resolve the effective offset.
@@ -320,12 +317,7 @@ mod tests {
 
     #[test]
     fn paginated_response_serializes() {
-        let resp = PaginatedResponse::new(
-            vec!["item1", "item2"],
-            42,
-            30,
-            0,
-        );
+        let resp = PaginatedResponse::new(vec!["item1", "item2"], 42, 30, 0);
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["data"], serde_json::json!(["item1", "item2"]));
         assert_eq!(json["pagination"]["total"], 42);
@@ -336,11 +328,7 @@ mod tests {
     #[test]
     fn paginated_response_from_pagination() {
         let pagination = Pagination::new(10, 20);
-        let resp = PaginatedResponse::from_pagination(
-            vec![1, 2, 3],
-            100,
-            &pagination,
-        );
+        let resp = PaginatedResponse::from_pagination(vec![1, 2, 3], 100, &pagination);
         assert_eq!(resp.data, vec![1, 2, 3]);
         assert_eq!(resp.pagination.total, 100);
         assert_eq!(resp.pagination.limit, 10);
@@ -349,12 +337,7 @@ mod tests {
 
     #[test]
     fn paginated_response_empty_data() {
-        let resp: PaginatedResponse<String> = PaginatedResponse::new(
-            vec![],
-            0,
-            30,
-            0,
-        );
+        let resp: PaginatedResponse<String> = PaginatedResponse::new(vec![], 0, 30, 0);
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["data"], serde_json::json!([]));
         assert_eq!(json["pagination"]["total"], 0);
@@ -362,12 +345,7 @@ mod tests {
 
     #[tokio::test]
     async fn paginated_response_into_response() {
-        let resp = PaginatedResponse::new(
-            vec!["a", "b", "c"],
-            10,
-            30,
-            0,
-        );
+        let resp = PaginatedResponse::new(vec!["a", "b", "c"], 10, 30, 0);
         let response = resp.into_response();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(

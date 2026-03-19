@@ -92,10 +92,7 @@ pub trait RateLimitBackend: Send + Sync + 'static {
     ///
     /// Returns `Ok(true)` if allowed, `Ok(false)` if rate-limited, or
     /// `Err(...)` if the backend is unavailable.
-    fn check_key(
-        &self,
-        key: &str,
-    ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>>;
+    fn check_key(&self, key: &str) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,11 +103,8 @@ pub trait RateLimitBackend: Send + Sync + 'static {
 type GlobalLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
 /// Per-IP keyed rate limiter state.
-type IpKeyedLimiter = RateLimiter<
-    String,
-    governor::state::keyed::DashMapStateStore<String>,
-    DefaultClock,
->;
+type IpKeyedLimiter =
+    RateLimiter<String, governor::state::keyed::DashMapStateStore<String>, DefaultClock>;
 
 /// In-memory rate-limit backend using the `governor` crate.
 ///
@@ -127,8 +121,8 @@ pub struct InMemoryBackend {
 impl InMemoryBackend {
     /// Create a new in-memory rate limiter with the given configuration.
     pub fn new(config: &RateLimitConfig) -> Self {
-        let per_window = NonZeroU32::new(config.requests_per_window)
-            .expect("requests_per_window must be > 0");
+        let per_window =
+            NonZeroU32::new(config.requests_per_window).expect("requests_per_window must be > 0");
 
         let quota = Quota::with_period(std::time::Duration::from_secs(
             config.window_secs / u64::from(config.requests_per_window.max(1)),
@@ -157,10 +151,7 @@ impl InMemoryBackend {
 }
 
 impl RateLimitBackend for InMemoryBackend {
-    fn check_key(
-        &self,
-        key: &str,
-    ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
+    fn check_key(&self, key: &str) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
         let allowed = if key == "unknown" {
             self.global_limiter.check().is_ok()
         } else {
@@ -242,10 +233,7 @@ return 1
 "#;
 
 impl RateLimitBackend for RedisBackend {
-    fn check_key(
-        &self,
-        key: &str,
-    ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
+    fn check_key(&self, key: &str) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
         let effective_key = if key == "unknown" {
             "global".to_string()
         } else {
@@ -862,7 +850,10 @@ mod tests {
     #[test]
     fn extract_ip_from_x_forwarded_for() {
         let req = Request::builder()
-            .header("x-forwarded-for", "203.0.113.50, 70.41.3.18, 150.172.238.178")
+            .header(
+                "x-forwarded-for",
+                "203.0.113.50, 70.41.3.18, 150.172.238.178",
+            )
             .body(Body::empty())
             .unwrap();
         assert_eq!(extract_client_ip(&req), "203.0.113.50");
@@ -1157,9 +1148,9 @@ mod tests {
                 &self,
                 _key: &str,
             ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
-                Box::pin(std::future::ready(Err(
-                    RateLimitError::BackendError("test error".to_string()),
-                )))
+                Box::pin(std::future::ready(Err(RateLimitError::BackendError(
+                    "test error".to_string(),
+                ))))
             }
         }
 
@@ -1180,9 +1171,9 @@ mod tests {
                 &self,
                 _key: &str,
             ) -> Pin<Box<dyn Future<Output = RateLimitResult> + Send + '_>> {
-                Box::pin(std::future::ready(Err(
-                    RateLimitError::BackendError("test error".to_string()),
-                )))
+                Box::pin(std::future::ready(Err(RateLimitError::BackendError(
+                    "test error".to_string(),
+                ))))
             }
         }
 

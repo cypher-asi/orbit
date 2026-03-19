@@ -10,11 +10,11 @@
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use crate::storage::git::GitCommand;
+    use crate::merge_engine::service::check_conflicts;
     use crate::merge_engine::strategies::{
         execute_merge_commit, execute_rebase_and_merge, execute_squash_merge, MergeError,
     };
-    use crate::merge_engine::service::check_conflicts;
+    use crate::storage::git::GitCommand;
     use crate::storage::service::StorageConfig;
 
     // -----------------------------------------------------------------------
@@ -39,11 +39,7 @@ mod tests {
         // Create a working clone so we can make commits
         let clone_dir = tmp.path().join("clone");
         let out = tokio::process::Command::new("git")
-            .args([
-                "clone",
-                repo.to_str().unwrap(),
-                clone_dir.to_str().unwrap(),
-            ])
+            .args(["clone", repo.to_str().unwrap(), clone_dir.to_str().unwrap()])
             .output()
             .await
             .unwrap();
@@ -170,8 +166,12 @@ mod tests {
             tokio::fs::write(&file_path, content).await.unwrap();
         }
 
-        git_add_commit_push(&clone_dir, &format!("add files on {}", branch_name), branch_name)
-            .await;
+        git_add_commit_push(
+            &clone_dir,
+            &format!("add files on {}", branch_name),
+            branch_name,
+        )
+        .await;
 
         clone_dir
     }
@@ -256,10 +256,7 @@ mod tests {
 
     /// Create a worktree from the bare repo for the target branch,
     /// configure user + remote, and fetch.
-    async fn setup_worktree(
-        bare_path: &Path,
-        target_branch: &str,
-    ) -> (tempfile::TempDir, PathBuf) {
+    async fn setup_worktree(bare_path: &Path, target_branch: &str) -> (tempfile::TempDir, PathBuf) {
         let wt_tmp = tempfile::tempdir().expect("tempdir for worktree");
         let wt_path = wt_tmp.path().join("worktree");
 
@@ -345,10 +342,7 @@ mod tests {
     /// Get the commit message (subject line) for a SHA.
     async fn commit_message(bare_path: &Path, sha: &str) -> String {
         let git = GitCommand::new(bare_path.to_path_buf());
-        let output = git
-            .run(&["log", "-1", "--format=%s", sha])
-            .await
-            .unwrap();
+        let output = git.run(&["log", "-1", "--format=%s", sha]).await.unwrap();
         assert!(output.success());
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
@@ -357,10 +351,7 @@ mod tests {
     async fn count_commits_between(bare_path: &Path, from: &str, to: &str) -> usize {
         let git = GitCommand::new(bare_path.to_path_buf());
         let range = format!("{}..{}", from, to);
-        let output = git
-            .run(&["rev-list", "--count", &range])
-            .await
-            .unwrap();
+        let output = git.run(&["rev-list", "--count", &range]).await.unwrap();
         assert!(output.success());
         let count_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
         count_str.parse::<usize>().unwrap_or(0)
@@ -398,8 +389,8 @@ mod tests {
     #[tokio::test]
     async fn merge_commit_creates_two_parent_commit() {
         let (tmp, bare) = init_test_repo().await;
-        let _ = create_feature_branch(&tmp, &bare, "feat-mc-1", &[("feature.txt", "hello\n")])
-            .await;
+        let _ =
+            create_feature_branch(&tmp, &bare, "feat-mc-1", &[("feature.txt", "hello\n")]).await;
 
         let git = GitCommand::new(bare.clone());
         let main_sha_before = get_ref_sha(&bare, "main").await;
@@ -422,7 +413,11 @@ mod tests {
 
         // Verify two parents
         let parents = commit_parents(&bare, &merge_sha).await;
-        assert_eq!(parents.len(), 2, "merge commit should have exactly 2 parents");
+        assert_eq!(
+            parents.len(),
+            2,
+            "merge commit should have exactly 2 parents"
+        );
         assert!(parents.contains(&main_sha_before));
         assert!(parents.contains(&feature_sha));
 
@@ -524,23 +519,16 @@ mod tests {
     #[tokio::test]
     async fn merge_commit_does_not_modify_source_branch() {
         let (tmp, bare) = init_test_repo().await;
-        let _ =
-            create_feature_branch(&tmp, &bare, "feat-mc-src", &[("src.txt", "source\n")]).await;
+        let _ = create_feature_branch(&tmp, &bare, "feat-mc-src", &[("src.txt", "source\n")]).await;
 
         let git = GitCommand::new(bare.clone());
         let feature_sha_before = get_ref_sha(&bare, "feat-mc-src").await;
 
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let _ = execute_merge_commit(
-            &git,
-            &wt_path,
-            "feat-mc-src",
-            "main",
-            "Merge source",
-        )
-        .await
-        .unwrap();
+        let _ = execute_merge_commit(&git, &wt_path, "feat-mc-src", "main", "Merge source")
+            .await
+            .unwrap();
 
         // Feature branch ref should be unchanged
         let feature_sha_after = get_ref_sha(&bare, "feat-mc-src").await;
@@ -554,8 +542,8 @@ mod tests {
     #[tokio::test]
     async fn squash_merge_creates_single_parent_commit() {
         let (tmp, bare) = init_test_repo().await;
-        let _ = create_feature_branch(&tmp, &bare, "feat-sq-1", &[("squash.txt", "squashed\n")])
-            .await;
+        let _ =
+            create_feature_branch(&tmp, &bare, "feat-sq-1", &[("squash.txt", "squashed\n")]).await;
 
         let git = GitCommand::new(bare.clone());
         let main_sha_before = get_ref_sha(&bare, "main").await;
@@ -577,7 +565,11 @@ mod tests {
 
         // Squash commit should have exactly ONE parent
         let parents = commit_parents(&bare, &squash_sha).await;
-        assert_eq!(parents.len(), 1, "squash commit should have exactly 1 parent");
+        assert_eq!(
+            parents.len(),
+            1,
+            "squash commit should have exactly 1 parent"
+        );
         assert_eq!(parents[0], main_sha_before);
 
         // Verify the bare repo ref was updated
@@ -590,13 +582,8 @@ mod tests {
         let (tmp, bare) = init_test_repo().await;
 
         // Create a feature branch with multiple commits
-        let clone_dir = create_feature_branch(
-            &tmp,
-            &bare,
-            "feat-sq-multi",
-            &[("file1.txt", "first\n")],
-        )
-        .await;
+        let clone_dir =
+            create_feature_branch(&tmp, &bare, "feat-sq-multi", &[("file1.txt", "first\n")]).await;
 
         // Add more commits
         add_commits_to_branch(
@@ -679,15 +666,10 @@ mod tests {
         let git = GitCommand::new(bare.clone());
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let squash_sha = execute_squash_merge(
-            &git,
-            &wt_path,
-            "feat-sq-changes",
-            "main",
-            "Squash changes",
-        )
-        .await
-        .unwrap_or_else(|e| panic!("squash failed: {}", format_merge_error(e)));
+        let squash_sha =
+            execute_squash_merge(&git, &wt_path, "feat-sq-changes", "main", "Squash changes")
+                .await
+                .unwrap_or_else(|e| panic!("squash failed: {}", format_merge_error(e)));
 
         assert!(file_exists_at_commit(&bare, &squash_sha, "alpha.txt").await);
         assert!(file_exists_at_commit(&bare, &squash_sha, "nested/beta.txt").await);
@@ -702,23 +684,16 @@ mod tests {
     #[tokio::test]
     async fn squash_merge_does_not_modify_source_branch() {
         let (tmp, bare) = init_test_repo().await;
-        let _ =
-            create_feature_branch(&tmp, &bare, "feat-sq-src", &[("src.txt", "source\n")]).await;
+        let _ = create_feature_branch(&tmp, &bare, "feat-sq-src", &[("src.txt", "source\n")]).await;
 
         let git = GitCommand::new(bare.clone());
         let feature_sha_before = get_ref_sha(&bare, "feat-sq-src").await;
 
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let _ = execute_squash_merge(
-            &git,
-            &wt_path,
-            "feat-sq-src",
-            "main",
-            "Squash",
-        )
-        .await
-        .unwrap();
+        let _ = execute_squash_merge(&git, &wt_path, "feat-sq-src", "main", "Squash")
+            .await
+            .unwrap();
 
         let feature_sha_after = get_ref_sha(&bare, "feat-sq-src").await;
         assert_eq!(feature_sha_before, feature_sha_after);
@@ -744,22 +719,21 @@ mod tests {
 
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let new_sha = execute_rebase_and_merge(
-            &git,
-            &wt_path,
-            "feat-rb-1",
-            "main",
-            "Rebase and merge",
-        )
-        .await
-        .unwrap_or_else(|e| panic!("rebase_and_merge failed: {}", format_merge_error(e)));
+        let new_sha =
+            execute_rebase_and_merge(&git, &wt_path, "feat-rb-1", "main", "Rebase and merge")
+                .await
+                .unwrap_or_else(|e| panic!("rebase_and_merge failed: {}", format_merge_error(e)));
 
         assert!(!new_sha.is_empty());
         assert_ne!(new_sha, main_sha_before);
 
         // Result should be a single-parent commit (linear history)
         let parents = commit_parents(&bare, &new_sha).await;
-        assert_eq!(parents.len(), 1, "rebased commit should have exactly 1 parent");
+        assert_eq!(
+            parents.len(),
+            1,
+            "rebased commit should have exactly 1 parent"
+        );
 
         // The parent should be the old main HEAD
         assert_eq!(parents[0], main_sha_before);
@@ -774,13 +748,9 @@ mod tests {
         let (tmp, bare) = init_test_repo().await;
 
         // Create feature branch with multiple commits
-        let clone_dir = create_feature_branch(
-            &tmp,
-            &bare,
-            "feat-rb-multi",
-            &[("rb_file1.txt", "first\n")],
-        )
-        .await;
+        let clone_dir =
+            create_feature_branch(&tmp, &bare, "feat-rb-multi", &[("rb_file1.txt", "first\n")])
+                .await;
 
         add_commits_to_branch(
             &clone_dir,
@@ -797,15 +767,10 @@ mod tests {
 
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let new_sha = execute_rebase_and_merge(
-            &git,
-            &wt_path,
-            "feat-rb-multi",
-            "main",
-            "Rebase and merge",
-        )
-        .await
-        .unwrap_or_else(|e| panic!("rebase failed: {}", format_merge_error(e)));
+        let new_sha =
+            execute_rebase_and_merge(&git, &wt_path, "feat-rb-multi", "main", "Rebase and merge")
+                .await
+                .unwrap_or_else(|e| panic!("rebase failed: {}", format_merge_error(e)));
 
         // Rebase should replay all 3 commits (initial branch + 2 additional)
         let count = count_commits_between(&bare, &main_sha_before, &new_sha).await;
@@ -823,10 +788,7 @@ mod tests {
         // Each commit in the chain should have exactly 1 parent (linear)
         let git2 = GitCommand::new(bare.clone());
         let range = format!("{}..{}", main_sha_before, new_sha);
-        let output = git2
-            .run(&["rev-list", &range])
-            .await
-            .unwrap();
+        let output = git2.run(&["rev-list", &range]).await.unwrap();
         assert!(output.success());
         let shas: Vec<String> = String::from_utf8_lossy(&output.stdout)
             .lines()
@@ -836,7 +798,11 @@ mod tests {
 
         for sha in &shas {
             let pc = commit_parent_count(&bare, sha).await;
-            assert_eq!(pc, 1, "each rebased commit should have 1 parent, sha={}", sha);
+            assert_eq!(
+                pc, 1,
+                "each rebased commit should have 1 parent, sha={}",
+                sha
+            );
         }
     }
 
@@ -854,15 +820,10 @@ mod tests {
         let git = GitCommand::new(bare.clone());
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let new_sha = execute_rebase_and_merge(
-            &git,
-            &wt_path,
-            "feat-rb-content",
-            "main",
-            "Rebase content",
-        )
-        .await
-        .unwrap_or_else(|e| panic!("rebase failed: {}", format_merge_error(e)));
+        let new_sha =
+            execute_rebase_and_merge(&git, &wt_path, "feat-rb-content", "main", "Rebase content")
+                .await
+                .unwrap_or_else(|e| panic!("rebase failed: {}", format_merge_error(e)));
 
         assert!(file_exists_at_commit(&bare, &new_sha, "rebase_data.txt").await);
         assert!(file_exists_at_commit(&bare, &new_sha, "README.md").await);
@@ -874,23 +835,16 @@ mod tests {
     #[tokio::test]
     async fn rebase_and_merge_does_not_modify_source_branch() {
         let (tmp, bare) = init_test_repo().await;
-        let _ =
-            create_feature_branch(&tmp, &bare, "feat-rb-src", &[("src.txt", "source\n")]).await;
+        let _ = create_feature_branch(&tmp, &bare, "feat-rb-src", &[("src.txt", "source\n")]).await;
 
         let git = GitCommand::new(bare.clone());
         let feature_sha_before = get_ref_sha(&bare, "feat-rb-src").await;
 
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let _ = execute_rebase_and_merge(
-            &git,
-            &wt_path,
-            "feat-rb-src",
-            "main",
-            "Rebase",
-        )
-        .await
-        .unwrap();
+        let _ = execute_rebase_and_merge(&git, &wt_path, "feat-rb-src", "main", "Rebase")
+            .await
+            .unwrap();
 
         let feature_sha_after = get_ref_sha(&bare, "feat-rb-src").await;
         assert_eq!(feature_sha_before, feature_sha_after);
@@ -914,13 +868,8 @@ mod tests {
         .await;
 
         // Push a conflicting change to main
-        push_conflicting_change_to_main(
-            &tmp,
-            &bare,
-            "shared.txt",
-            "content from main branch\n",
-        )
-        .await;
+        push_conflicting_change_to_main(&tmp, &bare, "shared.txt", "content from main branch\n")
+            .await;
 
         let git = GitCommand::new(bare.clone());
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
@@ -972,13 +921,8 @@ mod tests {
         )
         .await;
 
-        push_conflicting_change_to_main(
-            &tmp,
-            &bare,
-            "shared.txt",
-            "main has different content\n",
-        )
-        .await;
+        push_conflicting_change_to_main(&tmp, &bare, "shared.txt", "main has different content\n")
+            .await;
 
         let git = GitCommand::new(bare.clone());
         let main_sha_before = get_ref_sha(&bare, "main").await;
@@ -1253,13 +1197,7 @@ mod tests {
         .await;
 
         // Push conflicting change to main
-        push_conflicting_change_to_main(
-            &tmp,
-            &bare,
-            "shared.txt",
-            "main content\n",
-        )
-        .await;
+        push_conflicting_change_to_main(&tmp, &bare, "shared.txt", "main content\n").await;
 
         // Set up StorageConfig
         let repo_id = uuid::Uuid::new_v4();
@@ -1305,30 +1243,30 @@ mod tests {
             let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
             let result_sha = match idx {
-                0 => execute_merge_commit(
-                    &git,
-                    &wt_path,
-                    &branch_name,
-                    "main",
-                    "merge commit strategy",
-                )
-                .await,
-                1 => execute_squash_merge(
-                    &git,
-                    &wt_path,
-                    &branch_name,
-                    "main",
-                    "squash strategy",
-                )
-                .await,
-                2 => execute_rebase_and_merge(
-                    &git,
-                    &wt_path,
-                    &branch_name,
-                    "main",
-                    "rebase strategy",
-                )
-                .await,
+                0 => {
+                    execute_merge_commit(
+                        &git,
+                        &wt_path,
+                        &branch_name,
+                        "main",
+                        "merge commit strategy",
+                    )
+                    .await
+                }
+                1 => {
+                    execute_squash_merge(&git, &wt_path, &branch_name, "main", "squash strategy")
+                        .await
+                }
+                2 => {
+                    execute_rebase_and_merge(
+                        &git,
+                        &wt_path,
+                        &branch_name,
+                        "main",
+                        "rebase strategy",
+                    )
+                    .await
+                }
                 _ => unreachable!(),
             };
 
@@ -1379,35 +1317,18 @@ mod tests {
             let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
             let sha = match strategy_name {
-                "merge_commit" => execute_merge_commit(
-                    &git,
-                    &wt_path,
-                    &branch_name,
-                    "main",
-                    "merge",
-                )
-                .await,
-                "squash" => execute_squash_merge(
-                    &git,
-                    &wt_path,
-                    &branch_name,
-                    "main",
-                    "squash",
-                )
-                .await,
-                "rebase" => execute_rebase_and_merge(
-                    &git,
-                    &wt_path,
-                    &branch_name,
-                    "main",
-                    "rebase",
-                )
-                .await,
+                "merge_commit" => {
+                    execute_merge_commit(&git, &wt_path, &branch_name, "main", "merge").await
+                }
+                "squash" => {
+                    execute_squash_merge(&git, &wt_path, &branch_name, "main", "squash").await
+                }
+                "rebase" => {
+                    execute_rebase_and_merge(&git, &wt_path, &branch_name, "main", "rebase").await
+                }
                 _ => unreachable!(),
             }
-            .unwrap_or_else(|e| {
-                panic!("{} failed: {}", strategy_name, format_merge_error(e))
-            });
+            .unwrap_or_else(|e| panic!("{} failed: {}", strategy_name, format_merge_error(e)));
 
             let parents = commit_parent_count(&bare, &sha).await;
             assert_eq!(
@@ -1453,9 +1374,12 @@ mod tests {
             .unwrap();
         assert!(out.status.success());
 
-        tokio::fs::write(clone_dir.join("README.md"), "# Modified Repo\n\nNew content.\n")
-            .await
-            .unwrap();
+        tokio::fs::write(
+            clone_dir.join("README.md"),
+            "# Modified Repo\n\nNew content.\n",
+        )
+        .await
+        .unwrap();
 
         git_add_commit_push(&clone_dir, "modify README", "feat-modify").await;
 
@@ -1556,15 +1480,10 @@ mod tests {
         let git = GitCommand::new(bare.clone());
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let squash_sha = execute_squash_merge(
-            &git,
-            &wt_path,
-            "feat-delete",
-            "main",
-            "Squash delete file",
-        )
-        .await
-        .unwrap_or_else(|e| panic!("squash failed: {}", format_merge_error(e)));
+        let squash_sha =
+            execute_squash_merge(&git, &wt_path, "feat-delete", "main", "Squash delete file")
+                .await
+                .unwrap_or_else(|e| panic!("squash failed: {}", format_merge_error(e)));
 
         // The file should no longer exist
         assert!(!file_exists_at_commit(&bare, &squash_sha, "to_delete.txt").await);

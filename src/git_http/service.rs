@@ -4,8 +4,8 @@ use sqlx::PgPool;
 
 use crate::errors::ApiError;
 use crate::repos::models::Repo;
-use crate::users::service as user_service;
 use crate::repos::service as repo_service;
+use crate::users::service as user_service;
 
 /// Resolve a Git repository from URL path components.
 ///

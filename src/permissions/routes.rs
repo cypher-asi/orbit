@@ -94,8 +94,7 @@ pub async fn list_collaborators(
     State(state): State<AppState>,
     Path(path): Path<RepoPath>,
 ) -> Result<Json<Vec<RepoMember>>, ApiError> {
-    let repo_id =
-        resolve_repo_for_admin(&state.db, user.id, &path.owner, &path.repo).await?;
+    let repo_id = resolve_repo_for_admin(&state.db, user.id, &path.owner, &path.repo).await?;
 
     let members = service::list_collaborators(&state.db, repo_id).await?;
     Ok(Json(members))
@@ -111,8 +110,7 @@ pub async fn add_or_update_collaborator(
     Path(path): Path<RepoCollabPath>,
     Json(body): Json<AddOrUpdateCollaboratorRequest>,
 ) -> Result<(StatusCode, Json<RepoMember>), ApiError> {
-    let repo_id =
-        resolve_repo_for_admin(&state.db, user.id, &path.owner, &path.repo).await?;
+    let repo_id = resolve_repo_for_admin(&state.db, user.id, &path.owner, &path.repo).await?;
 
     // Resolve the target user by username.
     let target_user = user_service::get_user_by_username(&state.db, &path.username)
@@ -120,30 +118,20 @@ pub async fn add_or_update_collaborator(
         .ok_or_else(|| ApiError::NotFound("user not found".to_string()))?;
 
     // Check if the target user already has a membership.
-    let existing_role =
-        service::get_user_role(&state.db, target_user.id, repo_id).await?;
+    let existing_role = service::get_user_role(&state.db, target_user.id, repo_id).await?;
 
     match existing_role {
         Some(_) => {
             // Update existing collaborator's role.
-            let member = service::update_collaborator_role(
-                &state.db,
-                repo_id,
-                target_user.id,
-                body.role,
-            )
-            .await?;
+            let member =
+                service::update_collaborator_role(&state.db, repo_id, target_user.id, body.role)
+                    .await?;
             Ok((StatusCode::OK, Json(member)))
         }
         None => {
             // Add new collaborator.
-            let member = service::add_collaborator(
-                &state.db,
-                repo_id,
-                target_user.id,
-                body.role,
-            )
-            .await?;
+            let member =
+                service::add_collaborator(&state.db, repo_id, target_user.id, body.role).await?;
             Ok((StatusCode::CREATED, Json(member)))
         }
     }
@@ -158,8 +146,7 @@ pub async fn remove_collaborator(
     State(state): State<AppState>,
     Path(path): Path<RepoCollabPath>,
 ) -> Result<StatusCode, ApiError> {
-    let repo_id =
-        resolve_repo_for_admin(&state.db, user.id, &path.owner, &path.repo).await?;
+    let repo_id = resolve_repo_for_admin(&state.db, user.id, &path.owner, &path.repo).await?;
 
     // Resolve the target user by username.
     let target_user = user_service::get_user_by_username(&state.db, &path.username)
@@ -221,8 +208,7 @@ mod tests {
     #[test]
     fn deserialize_add_collaborator_request_invalid() {
         let json = r#"{"role": "superadmin"}"#;
-        let result: Result<AddOrUpdateCollaboratorRequest, _> =
-            serde_json::from_str(json);
+        let result: Result<AddOrUpdateCollaboratorRequest, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
 }

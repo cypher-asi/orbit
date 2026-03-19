@@ -1,8 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::errors::ApiError;
 use super::models::{AuditEvent, EventFilter, NewAuditEvent};
+use crate::errors::ApiError;
 
 /// Emit an audit event by inserting it into the `audit_events` table.
 ///
@@ -48,10 +48,7 @@ pub async fn emit(pool: &PgPool, event: NewAuditEvent) {
 ///
 /// Builds a dynamic query with optional WHERE clauses based on which
 /// filter fields are set. Results are ordered by `created_at DESC`.
-pub async fn list_events(
-    pool: &PgPool,
-    filter: EventFilter,
-) -> Result<Vec<AuditEvent>, ApiError> {
+pub async fn list_events(pool: &PgPool, filter: EventFilter) -> Result<Vec<AuditEvent>, ApiError> {
     // Build the query dynamically using a QueryBuilder to handle optional filters.
     let mut query = sqlx::QueryBuilder::<sqlx::Postgres>::new(
         "SELECT id, actor_id, event_type, repo_id, target_id, metadata, created_at FROM audit_events WHERE 1=1"
@@ -90,10 +87,7 @@ pub async fn list_events(
     query.push(" OFFSET ");
     query.push_bind(filter.offset as i64);
 
-    let events = query
-        .build_query_as::<AuditEvent>()
-        .fetch_all(pool)
-        .await?;
+    let events = query.build_query_as::<AuditEvent>().fetch_all(pool).await?;
 
     Ok(events)
 }
@@ -101,10 +95,7 @@ pub async fn list_events(
 /// Retrieve a single audit event by its ID.
 ///
 /// Returns `None` if no event with the given ID exists.
-pub async fn get_event(
-    pool: &PgPool,
-    id: Uuid,
-) -> Result<Option<AuditEvent>, ApiError> {
+pub async fn get_event(pool: &PgPool, id: Uuid) -> Result<Option<AuditEvent>, ApiError> {
     let event = sqlx::query_as::<_, AuditEvent>(
         r#"
         SELECT id, actor_id, event_type, repo_id, target_id, metadata, created_at

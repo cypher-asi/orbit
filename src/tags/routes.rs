@@ -78,13 +78,7 @@ async fn list_tags(
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let limit = query.limit.unwrap_or(100).min(100);
     let offset = query.offset.unwrap_or(0);
@@ -109,8 +103,5 @@ async fn list_tags(
 /// Mounts:
 /// - `GET /repos/{owner}/{repo}/tags` — list tags (paginated)
 pub fn tags_routes() -> Router<AppState> {
-    Router::new().route(
-        "/repos/{owner}/{repo}/tags",
-        get(list_tags),
-    )
+    Router::new().route("/repos/{owner}/{repo}/tags", get(list_tags))
 }

@@ -12,8 +12,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 /// Panics if the tracing subscriber cannot be set (e.g. if one is already
 /// installed). This function should be called exactly once at startup.
 pub fn init_logging(log_level: &str) {
-    let env_filter = EnvFilter::try_new(log_level)
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_new(log_level).unwrap_or_else(|_| EnvFilter::new("info"));
 
     let orbit_env = std::env::var("ORBIT_ENV").unwrap_or_default();
 
@@ -26,10 +25,7 @@ pub fn init_logging(log_level: &str) {
             .init();
     } else {
         // Pretty, human-readable format for development.
-        fmt()
-            .with_env_filter(env_filter)
-            .with_target(true)
-            .init();
+        fmt().with_env_filter(env_filter).with_target(true).init();
     }
 }
 

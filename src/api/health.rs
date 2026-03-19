@@ -41,16 +41,14 @@ async fn check_redis(redis_url: &str) -> Result<(), String> {
 
 /// Inner implementation of the Redis health check (without timeout wrapper).
 async fn check_redis_inner(redis_url: &str) -> Result<(), String> {
-    let client = redis::Client::open(redis_url).map_err(|e| {
-        format!("Failed to create Redis client: {}", e)
-    })?;
+    let client = redis::Client::open(redis_url)
+        .map_err(|e| format!("Failed to create Redis client: {}", e))?;
 
     let mut conn = redis::aio::ConnectionManager::new(client)
         .await
         .map_err(|e| format!("Failed to connect to Redis: {}", e))?;
 
-    let pong: Result<String, redis::RedisError> =
-        redis::cmd("PING").query_async(&mut conn).await;
+    let pong: Result<String, redis::RedisError> = redis::cmd("PING").query_async(&mut conn).await;
 
     match pong {
         Ok(ref response) if response == "PONG" => Ok(()),
@@ -207,8 +205,7 @@ mod tests {
     #[tokio::test]
     async fn health_returns_degraded_when_redis_unreachable() {
         // Use a bogus Redis URL that will fail to connect
-        let state =
-            test_app_state(test_config_with_redis("redis://127.0.0.1:1"));
+        let state = test_app_state(test_config_with_redis("redis://127.0.0.1:1"));
         let app = Router::new()
             .route("/health", get(health_check))
             .with_state(state);
@@ -235,17 +232,19 @@ mod tests {
         assert_eq!(value["status"], "degraded");
         assert_eq!(value["components"]["redis"]["status"], "down");
         // Should include an error message
-        assert!(value["components"]["redis"]["message"]
-            .as_str()
-            .unwrap_or("")
-            .len() > 0);
+        assert!(
+            value["components"]["redis"]["message"]
+                .as_str()
+                .unwrap_or("")
+                .len()
+                > 0
+        );
     }
 
     #[tokio::test]
     async fn health_includes_redis_component_when_configured() {
         // Even when Redis is down, the component should be present
-        let state =
-            test_app_state(test_config_with_redis("redis://127.0.0.1:1"));
+        let state = test_app_state(test_config_with_redis("redis://127.0.0.1:1"));
         let app = Router::new()
             .route("/health", get(health_check))
             .with_state(state);

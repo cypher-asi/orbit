@@ -93,13 +93,7 @@ async fn list_branches(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let sc = storage_config(&state);
     let branches = branch_service::list_branches(&sc, repo.id, &repo.default_branch).await?;
@@ -117,20 +111,12 @@ async fn get_branch(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let sc = storage_config(&state);
     let branch = branch_service::get_branch(&sc, repo.id, &path.branch, &repo.default_branch)
         .await?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("branch '{}' not found", path.branch))
-        })?;
+        .ok_or_else(|| ApiError::NotFound(format!("branch '{}' not found", path.branch)))?;
 
     Ok(Json(branch))
 }
@@ -145,20 +131,13 @@ async fn create_branch(
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Check write permission (also rejects archived repos).
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Write,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)
+        .await?;
 
     // Reject if repo is archived (belt-and-suspenders; check_repo_access
     // should already reject writes on archived repos).
     if repo.archived {
-        return Err(ApiError::Forbidden(
-            "repository is archived".to_string(),
-        ));
+        return Err(ApiError::Forbidden("repository is archived".to_string()));
     }
 
     let sc = storage_config(&state);
@@ -197,19 +176,12 @@ async fn delete_branch(
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Check write permission (also rejects archived repos).
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Write,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)
+        .await?;
 
     // Reject if repo is archived.
     if repo.archived {
-        return Err(ApiError::Forbidden(
-            "repository is archived".to_string(),
-        ));
+        return Err(ApiError::Forbidden("repository is archived".to_string()));
     }
 
     let sc = storage_config(&state);

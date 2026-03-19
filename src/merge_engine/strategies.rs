@@ -50,14 +50,22 @@ async fn git_in_worktree_ok(
     let output = git_in_worktree(worktree_path, args).await?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(MergeError::Internal(format!("{}: {}", error_context, stderr)));
+        return Err(MergeError::Internal(format!(
+            "{}: {}",
+            error_context, stderr
+        )));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// Get the current HEAD SHA inside a worktree.
 async fn head_sha(worktree_path: &Path) -> Result<String, MergeError> {
-    git_in_worktree_ok(worktree_path, &["rev-parse", "HEAD"], "failed to get HEAD SHA").await
+    git_in_worktree_ok(
+        worktree_path,
+        &["rev-parse", "HEAD"],
+        "failed to get HEAD SHA",
+    )
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +154,10 @@ pub(crate) async fn execute_merge_commit(
             return Err(MergeError::Conflict(files));
         }
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(MergeError::Internal(format!("git merge failed: {}", stderr)));
+        return Err(MergeError::Internal(format!(
+            "git merge failed: {}",
+            stderr
+        )));
     }
 
     // Get the resulting merge commit SHA.
@@ -200,11 +211,7 @@ pub(crate) async fn execute_squash_merge(
     .await?;
 
     // Squash merge.
-    let output = git_in_worktree(
-        worktree_path,
-        &["merge", "--squash", &source_ref],
-    )
-    .await?;
+    let output = git_in_worktree(worktree_path, &["merge", "--squash", &source_ref]).await?;
 
     if !output.status.success() {
         if output_has_conflicts(&output) {
@@ -219,11 +226,7 @@ pub(crate) async fn execute_squash_merge(
     }
 
     // Commit the squashed changes.
-    let commit_output = git_in_worktree(
-        worktree_path,
-        &["commit", "-m", message],
-    )
-    .await?;
+    let commit_output = git_in_worktree(worktree_path, &["commit", "-m", message]).await?;
 
     if !commit_output.status.success() {
         let stderr = String::from_utf8_lossy(&commit_output.stderr);
@@ -281,11 +284,7 @@ pub(crate) async fn execute_rebase_and_merge(
     // After completion, HEAD is at the rebased tip (detached).
     // Note: since we want to keep target ref untouched, and git rebase
     // with a remote ref naturally ends in detached HEAD, this is safe.
-    let rebase_output = git_in_worktree(
-        worktree_path,
-        &["rebase", target, &source_ref],
-    )
-    .await?;
+    let rebase_output = git_in_worktree(worktree_path, &["rebase", target, &source_ref]).await?;
 
     if !rebase_output.status.success() {
         let stderr = String::from_utf8_lossy(&rebase_output.stderr);
@@ -337,9 +336,7 @@ pub(crate) async fn update_target_ref(
     let output = git
         .run(&["update-ref", &target_ref, new_sha, old_sha])
         .await
-        .map_err(|e| {
-            MergeError::Internal(format!("failed to run git update-ref: {}", e))
-        })?;
+        .map_err(|e| MergeError::Internal(format!("failed to run git update-ref: {}", e)))?;
 
     if !output.success() {
         return Err(MergeError::Internal(format!(
@@ -432,7 +429,11 @@ mod tests {
             .output()
             .await
             .unwrap();
-        assert!(out.status.success(), "push main failed: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "push main failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
 
         (tmp, repo)
     }
@@ -448,11 +449,21 @@ mod tests {
     ) -> PathBuf {
         let clone_dir = tmp.path().join(format!("clone-{}", branch_name));
         let out = tokio::process::Command::new("git")
-            .args(["clone", "-b", "main", bare_path.to_str().unwrap(), clone_dir.to_str().unwrap()])
+            .args([
+                "clone",
+                "-b",
+                "main",
+                bare_path.to_str().unwrap(),
+                clone_dir.to_str().unwrap(),
+            ])
             .output()
             .await
             .unwrap();
-        assert!(out.status.success(), "clone failed: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "clone failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
 
         // Configure user
         for args in [
@@ -490,7 +501,11 @@ mod tests {
         assert!(out.status.success());
 
         let out = tokio::process::Command::new("git")
-            .args(["commit", "-m", &format!("add {} on {}", filename, branch_name)])
+            .args([
+                "commit",
+                "-m",
+                &format!("add {} on {}", filename, branch_name),
+            ])
             .current_dir(&clone_dir)
             .output()
             .await
@@ -515,10 +530,7 @@ mod tests {
 
     // Helper: create a worktree from the bare repo for the target branch,
     // configure user + remote, and fetch.
-    async fn setup_worktree(
-        bare_path: &Path,
-        target_branch: &str,
-    ) -> (tempfile::TempDir, PathBuf) {
+    async fn setup_worktree(bare_path: &Path, target_branch: &str) -> (tempfile::TempDir, PathBuf) {
         let wt_tmp = tempfile::tempdir().expect("tempdir for worktree");
         let wt_path = wt_tmp.path().join("worktree");
 
@@ -621,10 +633,14 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "merge_commit failed: {:?}", result.err().map(|e| match e {
-            MergeError::Internal(s) => s,
-            MergeError::Conflict(f) => format!("conflicts: {:?}", f),
-        }));
+        assert!(
+            result.is_ok(),
+            "merge_commit failed: {:?}",
+            result.err().map(|e| match e {
+                MergeError::Internal(s) => s,
+                MergeError::Conflict(f) => format!("conflicts: {:?}", f),
+            })
+        );
 
         let merge_sha = result.unwrap();
         assert!(!merge_sha.is_empty());
@@ -671,7 +687,10 @@ mod tests {
 
         // Verify commit message
         let git2 = GitCommand::new(bare.clone());
-        let output = git2.run(&["log", "-1", "--format=%s", &merge_sha]).await.unwrap();
+        let output = git2
+            .run(&["log", "-1", "--format=%s", &merge_sha])
+            .await
+            .unwrap();
         let subject = String::from_utf8_lossy(&output.stdout).trim().to_string();
         assert_eq!(subject, "Custom merge message");
     }
@@ -699,10 +718,14 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "squash_merge failed: {:?}", result.err().map(|e| match e {
-            MergeError::Internal(s) => s,
-            MergeError::Conflict(f) => format!("conflicts: {:?}", f),
-        }));
+        assert!(
+            result.is_ok(),
+            "squash_merge failed: {:?}",
+            result.err().map(|e| match e {
+                MergeError::Internal(s) => s,
+                MergeError::Conflict(f) => format!("conflicts: {:?}", f),
+            })
+        );
 
         let squash_sha = result.unwrap();
         assert!(!squash_sha.is_empty());
@@ -749,7 +772,10 @@ mod tests {
         .unwrap();
 
         let git2 = GitCommand::new(bare.clone());
-        let output = git2.run(&["log", "-1", "--format=%s", &squash_sha]).await.unwrap();
+        let output = git2
+            .run(&["log", "-1", "--format=%s", &squash_sha])
+            .await
+            .unwrap();
         let subject = String::from_utf8_lossy(&output.stdout).trim().to_string();
         assert_eq!(subject, "Squash merge message");
     }
@@ -768,19 +794,18 @@ mod tests {
 
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let result = execute_rebase_and_merge(
-            &git,
-            &wt_path,
-            "feature-rb",
-            "main",
-            "Rebase and merge",
-        )
-        .await;
+        let result =
+            execute_rebase_and_merge(&git, &wt_path, "feature-rb", "main", "Rebase and merge")
+                .await;
 
-        assert!(result.is_ok(), "rebase_and_merge failed: {:?}", result.err().map(|e| match e {
-            MergeError::Internal(s) => s,
-            MergeError::Conflict(f) => format!("conflicts: {:?}", f),
-        }));
+        assert!(
+            result.is_ok(),
+            "rebase_and_merge failed: {:?}",
+            result.err().map(|e| match e {
+                MergeError::Internal(s) => s,
+                MergeError::Conflict(f) => format!("conflicts: {:?}", f),
+            })
+        );
 
         let new_sha = result.unwrap();
         assert!(!new_sha.is_empty());
@@ -819,7 +844,11 @@ mod tests {
 
         // Create two branches that modify the same file differently
         let _clone1 = create_feature_branch(
-            &tmp, &bare, "conflict-a", "shared.txt", "content from branch a\n",
+            &tmp,
+            &bare,
+            "conflict-a",
+            "shared.txt",
+            "content from branch a\n",
         )
         .await;
 
@@ -827,7 +856,13 @@ mod tests {
         // First update main with a conflicting file.
         let clone_main = tmp.path().join("clone-main-conflict");
         let out = tokio::process::Command::new("git")
-            .args(["clone", "-b", "main", bare.to_str().unwrap(), clone_main.to_str().unwrap()])
+            .args([
+                "clone",
+                "-b",
+                "main",
+                bare.to_str().unwrap(),
+                clone_main.to_str().unwrap(),
+            ])
             .output()
             .await
             .unwrap();
@@ -878,14 +913,8 @@ mod tests {
         let git = GitCommand::new(bare.clone());
         let (_wt_tmp, wt_path) = setup_worktree(&bare, "main").await;
 
-        let result = execute_merge_commit(
-            &git,
-            &wt_path,
-            "conflict-a",
-            "main",
-            "This should fail",
-        )
-        .await;
+        let result =
+            execute_merge_commit(&git, &wt_path, "conflict-a", "main", "This should fail").await;
 
         match result {
             Err(MergeError::Conflict(files)) => {
@@ -915,14 +944,25 @@ mod tests {
         // We'll use commit-tree for this.
         let tree_output = git.run(&["rev-parse", "main^{tree}"]).await.unwrap();
         assert!(tree_output.success());
-        let tree_sha = String::from_utf8_lossy(&tree_output.stdout).trim().to_string();
+        let tree_sha = String::from_utf8_lossy(&tree_output.stdout)
+            .trim()
+            .to_string();
 
         let commit_output = git
-            .run(&["commit-tree", &tree_sha, "-p", &old_sha, "-m", "test commit"])
+            .run(&[
+                "commit-tree",
+                &tree_sha,
+                "-p",
+                &old_sha,
+                "-m",
+                "test commit",
+            ])
             .await
             .unwrap();
         assert!(commit_output.success());
-        let new_sha = String::from_utf8_lossy(&commit_output.stdout).trim().to_string();
+        let new_sha = String::from_utf8_lossy(&commit_output.stdout)
+            .trim()
+            .to_string();
 
         // Use our helper
         let result = update_target_ref(&git, "main", &new_sha, &old_sha).await;
@@ -941,13 +981,17 @@ mod tests {
 
         // Create a new commit
         let tree_output = git.run(&["rev-parse", "main^{tree}"]).await.unwrap();
-        let tree_sha = String::from_utf8_lossy(&tree_output.stdout).trim().to_string();
+        let tree_sha = String::from_utf8_lossy(&tree_output.stdout)
+            .trim()
+            .to_string();
 
         let commit_output = git
             .run(&["commit-tree", &tree_sha, "-p", &real_sha, "-m", "test"])
             .await
             .unwrap();
-        let new_sha = String::from_utf8_lossy(&commit_output.stdout).trim().to_string();
+        let new_sha = String::from_utf8_lossy(&commit_output.stdout)
+            .trim()
+            .to_string();
 
         // Try to update with a wrong old SHA
         let wrong_old = "0000000000000000000000000000000000000000";

@@ -2,56 +2,13 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Possible states for a background job.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum JobStatus {
-    Pending,
-    Running,
-    Completed,
-    Failed,
-}
-
-impl JobStatus {
-    /// Return the string representation stored in the database.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            JobStatus::Pending => "pending",
-            JobStatus::Running => "running",
-            JobStatus::Completed => "completed",
-            JobStatus::Failed => "failed",
-        }
-    }
-}
-
-impl std::fmt::Display for JobStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl TryFrom<&str> for JobStatus {
-    type Error = String;
-
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        match s {
-            "pending" => Ok(JobStatus::Pending),
-            "running" => Ok(JobStatus::Running),
-            "completed" => Ok(JobStatus::Completed),
-            "failed" => Ok(JobStatus::Failed),
-            other => Err(format!("unknown job status: {}", other)),
-        }
-    }
-}
-
 /// Represents a row in the `jobs` table.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Job {
     pub id: Uuid,
     pub job_type: String,
     pub payload: serde_json::Value,
-    /// Stored as a VARCHAR in Postgres; mapped to/from `JobStatus` via
-    /// the string representation.
+    /// Stored as a VARCHAR in Postgres (e.g. "pending", "running", "completed", "failed").
     pub status: String,
     pub attempts: i32,
     pub max_attempts: i32,

@@ -8,8 +8,7 @@ use crate::permissions::models::Role;
 use crate::storage;
 
 use super::models::{
-    CreateRepoInput, Pagination, Repo, UpdateRepoInput, Visibility,
-    generate_slug, validate_slug,
+    generate_slug, validate_slug, CreateRepoInput, Pagination, Repo, UpdateRepoInput, Visibility,
 };
 
 // ---------------------------------------------------------------------------
@@ -327,67 +326,6 @@ pub async fn update_repo(
     Ok(repo)
 }
 
-/// Set the visibility of a repository.
-///
-/// Emits a `repo.visibility_changed` audit event.
-pub async fn set_visibility(
-    pool: &PgPool,
-    id: Uuid,
-    actor_id: Uuid,
-    visibility: Visibility,
-) -> Result<Repo, ApiError> {
-    let repo = sqlx::query_as::<_, Repo>(
-        r#"
-        UPDATE repos
-        SET visibility = $2, updated_at = now()
-        WHERE id = $1 AND deleted_at IS NULL
-        RETURNING *
-        "#,
-    )
-    .bind(id)
-    .bind(visibility)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    storage::emit_audit_event(
-        pool,
-        actor_id,
-        "repo.visibility_changed",
-        Some(id),
-        None,
-        Some(serde_json::json!({
-            "visibility": visibility.as_str(),
-        })),
-    )
-    .await;
-
-    Ok(repo)
-}
-
-/// Set the default branch of a repository.
-pub async fn set_default_branch(
-    pool: &PgPool,
-    id: Uuid,
-    branch: &str,
-) -> Result<Repo, ApiError> {
-    let repo = sqlx::query_as::<_, Repo>(
-        r#"
-        UPDATE repos
-        SET default_branch = $2, updated_at = now()
-        WHERE id = $1 AND deleted_at IS NULL
-        RETURNING *
-        "#,
-    )
-    .bind(id)
-    .bind(branch)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
-
-    Ok(repo)
-}
-
 // ---------------------------------------------------------------------------
 // Archive
 // ---------------------------------------------------------------------------
@@ -395,11 +333,7 @@ pub async fn set_default_branch(
 /// Archive a repository, preventing further writes.
 ///
 /// Emits a `repo.archived` audit event.
-pub async fn archive_repo(
-    pool: &PgPool,
-    id: Uuid,
-    actor_id: Uuid,
-) -> Result<(), ApiError> {
+pub async fn archive_repo(pool: &PgPool, id: Uuid, actor_id: Uuid) -> Result<(), ApiError> {
     let result = sqlx::query(
         r#"
         UPDATE repos
@@ -415,15 +349,7 @@ pub async fn archive_repo(
         return Err(ApiError::NotFound("repository not found".to_string()));
     }
 
-    storage::emit_audit_event(
-        pool,
-        actor_id,
-        "repo.archived",
-        Some(id),
-        None,
-        None,
-    )
-    .await;
+    storage::emit_audit_event(pool, actor_id, "repo.archived", Some(id), None, None).await;
 
     Ok(())
 }
@@ -436,11 +362,7 @@ pub async fn archive_repo(
 ///
 /// The repository will be excluded from all subsequent queries.
 /// Emits a `repo.deleted` audit event.
-pub async fn delete_repo(
-    pool: &PgPool,
-    id: Uuid,
-    actor_id: Uuid,
-) -> Result<(), ApiError> {
+pub async fn delete_repo(pool: &PgPool, id: Uuid, actor_id: Uuid) -> Result<(), ApiError> {
     let result = sqlx::query(
         r#"
         UPDATE repos
@@ -456,15 +378,7 @@ pub async fn delete_repo(
         return Err(ApiError::NotFound("repository not found".to_string()));
     }
 
-    storage::emit_audit_event(
-        pool,
-        actor_id,
-        "repo.deleted",
-        Some(id),
-        None,
-        None,
-    )
-    .await;
+    storage::emit_audit_event(pool, actor_id, "repo.deleted", Some(id), None, None).await;
 
     Ok(())
 }

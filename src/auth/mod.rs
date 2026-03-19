@@ -1,10 +1,10 @@
 mod password;
 pub use password::hash_password;
 
-pub mod token;
 pub mod models;
 pub mod routes;
 pub mod service;
+pub mod token;
 
 mod extractor;
 pub use extractor::AuthUser;

@@ -49,22 +49,19 @@ impl Config {
         // Load .env file if present; ignore errors (file may not exist).
         let _ = dotenvy::dotenv();
 
-        let database_url = env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-        let server_host = env::var("SERVER_HOST")
-            .unwrap_or_else(|_| "0.0.0.0".to_string());
+        let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
         let server_port = env::var("SERVER_PORT")
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()
             .expect("SERVER_PORT must be a valid u16");
 
-        let git_storage_root = env::var("GIT_STORAGE_ROOT")
-            .unwrap_or_else(|_| "./data/repos".to_string());
+        let git_storage_root =
+            env::var("GIT_STORAGE_ROOT").unwrap_or_else(|_| "./data/repos".to_string());
 
-        let log_level = env::var("LOG_LEVEL")
-            .unwrap_or_else(|_| "info".to_string());
+        let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
 
         let cors_allowed_origins: Vec<String> = env::var("CORS_ALLOWED_ORIGINS")
             .unwrap_or_default()
@@ -75,8 +72,7 @@ impl Config {
 
         let redis_url = env::var("REDIS_URL").ok().filter(|s| !s.is_empty());
 
-        let public_base_url =
-            env::var("PUBLIC_BASE_URL").ok().filter(|s| !s.is_empty());
+        let public_base_url = env::var("PUBLIC_BASE_URL").ok().filter(|s| !s.is_empty());
 
         Config {
             database_url,
@@ -151,7 +147,10 @@ mod tests {
             env::set_var("SERVER_PORT", "8080");
             env::set_var("GIT_STORAGE_ROOT", "/data/repos");
             env::set_var("LOG_LEVEL", "debug");
-            env::set_var("CORS_ALLOWED_ORIGINS", "https://example.com, https://app.example.com");
+            env::set_var(
+                "CORS_ALLOWED_ORIGINS",
+                "https://example.com, https://app.example.com",
+            );
             env::remove_var("PUBLIC_BASE_URL");
         }
 

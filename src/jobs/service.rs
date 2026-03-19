@@ -2,59 +2,8 @@ use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::errors::ApiError;
 use super::models::Job;
-
-/// Enqueue a new background job for immediate execution.
-///
-/// The job is inserted with `status = 'pending'` and `run_at = now()`.
-/// Returns the UUID of the newly created job.
-pub async fn enqueue(
-    pool: &PgPool,
-    job_type: &str,
-    payload: serde_json::Value,
-) -> Result<Uuid, ApiError> {
-    let row = sqlx::query_scalar::<_, Uuid>(
-        r#"
-        INSERT INTO jobs (job_type, payload)
-        VALUES ($1, $2)
-        RETURNING id
-        "#,
-    )
-    .bind(job_type)
-    .bind(&payload)
-    .fetch_one(pool)
-    .await?;
-
-    tracing::debug!(job_id = %row, job_type = %job_type, "job enqueued");
-    Ok(row)
-}
-
-/// Enqueue a new background job that should not run before `run_at`.
-///
-/// Identical to [`enqueue`] but allows scheduling the job for a future time.
-pub async fn enqueue_delayed(
-    pool: &PgPool,
-    job_type: &str,
-    payload: serde_json::Value,
-    run_at: DateTime<Utc>,
-) -> Result<Uuid, ApiError> {
-    let row = sqlx::query_scalar::<_, Uuid>(
-        r#"
-        INSERT INTO jobs (job_type, payload, run_at)
-        VALUES ($1, $2, $3)
-        RETURNING id
-        "#,
-    )
-    .bind(job_type)
-    .bind(&payload)
-    .bind(run_at)
-    .fetch_one(pool)
-    .await?;
-
-    tracing::debug!(job_id = %row, job_type = %job_type, %run_at, "delayed job enqueued");
-    Ok(row)
-}
+use crate::errors::ApiError;
 
 /// Atomically claim the next pending job that is ready to run.
 ///
@@ -132,9 +81,9 @@ pub async fn fail(pool: &PgPool, job_id: Uuid, error: &str) -> Result<(), ApiErr
     if job.attempts < job.max_attempts {
         // Calculate backoff delay based on the current attempt number.
         let delay = match job.attempts {
-            1 => Duration::seconds(30),      // after 1st failure: +30s
-            2 => Duration::seconds(300),     // after 2nd failure: +5 min
-            _ => Duration::seconds(300),     // 3rd+: +5 min
+            1 => Duration::seconds(30),  // after 1st failure: +30s
+            2 => Duration::seconds(300), // after 2nd failure: +5 min
+            _ => Duration::seconds(300), // 3rd+: +5 min
         };
         let next_run_at = Utc::now() + delay;
 
@@ -224,17 +173,6 @@ pub async fn list_jobs(
             Ok(jobs)
         }
     }
-}
-
-/// Get a single job by ID.
-pub async fn get_job(pool: &PgPool, job_id: Uuid) -> Result<Option<Job>, ApiError> {
-    let job = sqlx::query_as::<_, Job>(
-        "SELECT * FROM jobs WHERE id = $1",
-    )
-    .bind(job_id)
-    .fetch_optional(pool)
-    .await?;
-    Ok(job)
 }
 
 /// List failed jobs, ordered by most recent first.

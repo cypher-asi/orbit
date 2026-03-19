@@ -46,12 +46,9 @@ impl std::fmt::Display for PrStatus {
 
 // sqlx encoding/decoding: store as TEXT matching the DB varchar column.
 impl<'r> sqlx::Decode<'r, sqlx::Postgres> for PrStatus {
-    fn decode(
-        value: sqlx::postgres::PgValueRef<'r>,
-    ) -> Result<Self, sqlx::error::BoxDynError> {
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let s = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
-        PrStatus::from_db_str(s)
-            .ok_or_else(|| format!("unknown PR status: {}", s).into())
+        PrStatus::from_db_str(s).ok_or_else(|| format!("unknown PR status: {}", s).into())
     }
 }
 
@@ -252,7 +249,10 @@ mod tests {
         assert_eq!(input.source_branch, "feature/foo");
         assert_eq!(input.target_branch, "main");
         assert_eq!(input.title, "Add feature foo");
-        assert_eq!(input.description.as_deref(), Some("This adds the foo feature"));
+        assert_eq!(
+            input.description.as_deref(),
+            Some("This adds the foo feature")
+        );
     }
 
     #[test]

@@ -23,10 +23,3 @@ pub struct AuthTokenInfo {
     pub created_at: DateTime<Utc>,
     pub expires_at: Option<DateTime<Utc>>,
 }
-
-/// Input for creating a new personal access token.
-#[derive(Debug, Clone, Deserialize)]
-pub struct CreateTokenInput {
-    pub name: String,
-    pub expires_in: Option<std::time::Duration>,
-}

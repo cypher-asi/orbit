@@ -113,21 +113,15 @@ fn validate_email(email: &str) -> Result<(), ApiError> {
             let local = &email[..pos];
             let domain = &email[pos + 1..];
             if local.is_empty() || domain.is_empty() || !domain.contains('.') {
-                return Err(ApiError::BadRequest(
-                    "invalid email format".to_string(),
-                ));
+                return Err(ApiError::BadRequest("invalid email format".to_string()));
             }
             // Make sure there's only one '@'
             if email.chars().filter(|&c| c == '@').count() != 1 {
-                return Err(ApiError::BadRequest(
-                    "invalid email format".to_string(),
-                ));
+                return Err(ApiError::BadRequest("invalid email format".to_string()));
             }
         }
         None => {
-            return Err(ApiError::BadRequest(
-                "invalid email format".to_string(),
-            ));
+            return Err(ApiError::BadRequest("invalid email format".to_string()));
         }
     }
 
@@ -188,9 +182,7 @@ pub async fn register(
 }
 
 /// GET /users/me - Get current user profile
-pub async fn get_me(
-    AuthUser(user): AuthUser,
-) -> Result<Json<UserResponse>, ApiError> {
+pub async fn get_me(AuthUser(user): AuthUser) -> Result<Json<UserResponse>, ApiError> {
     Ok(Json(UserResponse::from(user)))
 }
 
@@ -231,8 +223,7 @@ pub async fn update_me(
 /// This is used by the central router to separate rate-limited auth routes
 /// from non-rate-limited profile routes.
 pub fn users_profile_routes() -> Router<AppState> {
-    Router::new()
-        .route("/users/me", get(get_me).patch(update_me))
+    Router::new().route("/users/me", get(get_me).patch(update_me))
 }
 
 #[cfg(test)]

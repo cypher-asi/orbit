@@ -88,13 +88,8 @@ async fn merge_pr(
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Require write permission on the repo.
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Write,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)
+        .await?;
 
     // Verify the PR belongs to this repo (404 if not).
     let pr = crate::pull_requests::service::get_pr_by_id(&state.db, path.id)

@@ -18,7 +18,9 @@ use crate::repos::service as repo_service;
 use crate::storage::service::StorageConfig;
 use crate::users::service as user_service;
 
-use super::models::{CreatePrInput, MergeabilityState, PrFilter, PrStatus, PullRequest, UpdatePrInput};
+use super::models::{
+    CreatePrInput, MergeabilityState, PrFilter, PrStatus, PullRequest, UpdatePrInput,
+};
 use super::service as pr_service;
 
 // ---------------------------------------------------------------------------
@@ -136,13 +138,8 @@ async fn check_author_or_write(
     }
 
     // Otherwise, require write permission on the repo.
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user_id),
-        repo_id,
-        Permission::Write,
-    )
-    .await
+    permissions_service::check_repo_access(&state.db, Some(user_id), repo_id, Permission::Write)
+        .await
 }
 
 // ---------------------------------------------------------------------------
@@ -159,13 +156,8 @@ async fn create_pr(
     let repo = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Check write permission.
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Write,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Write)
+        .await?;
 
     let sc = storage_config(&state);
     let input = CreatePrInput {
@@ -193,20 +185,13 @@ async fn list_prs(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     // Parse the optional status filter.
     let status = match query.status.as_deref() {
         Some(s) => {
-            let parsed = PrStatus::from_db_str(s).ok_or_else(|| {
-                ApiError::BadRequest(format!("invalid status filter: '{}'", s))
-            })?;
+            let parsed = PrStatus::from_db_str(s)
+                .ok_or_else(|| ApiError::BadRequest(format!("invalid status filter: '{}'", s)))?;
             Some(parsed)
         }
         None => None,
@@ -234,13 +219,7 @@ async fn get_pr(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
@@ -318,13 +297,7 @@ async fn get_pr_diff(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
@@ -349,13 +322,7 @@ async fn check_mergeability(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
@@ -367,7 +334,9 @@ async fn check_mergeability(
     )
     .await?;
 
-    Ok(Json(MergeabilityResponse { mergeability: state_val }))
+    Ok(Json(MergeabilityResponse {
+        mergeability: state_val,
+    }))
 }
 
 /// GET /repos/{owner}/{repo}/pulls/{id}/conflicts -- Check merge conflicts (optional auth).
@@ -384,24 +353,13 @@ async fn check_conflicts(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     let pr = resolve_pr_in_repo(&state.db, path.id, repo.id).await?;
 
     let sc = storage_config(&state);
-    let conflict_check = merge_service::check_conflicts(
-        &sc,
-        repo.id,
-        &pr.source_branch,
-        &pr.target_branch,
-    )
-    .await?;
+    let conflict_check =
+        merge_service::check_conflicts(&sc, repo.id, &pr.source_branch, &pr.target_branch).await?;
 
     Ok(Json(conflict_check))
 }
@@ -446,26 +404,14 @@ pub fn create_pr_handler() -> axum::routing::MethodRouter<AppState> {
 /// - `GET    /repos/{owner}/{repo}/pulls/{id}/conflicts`   -- check merge conflicts
 pub fn pull_request_routes_without_create() -> Router<AppState> {
     Router::new()
-        .route(
-            "/repos/{owner}/{repo}/pulls",
-            get(list_prs),
-        )
+        .route("/repos/{owner}/{repo}/pulls", get(list_prs))
         .route(
             "/repos/{owner}/{repo}/pulls/{id}",
             get(get_pr).patch(update_pr),
         )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/close",
-            post(close_pr),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/reopen",
-            post(reopen_pr),
-        )
-        .route(
-            "/repos/{owner}/{repo}/pulls/{id}/diff",
-            get(get_pr_diff),
-        )
+        .route("/repos/{owner}/{repo}/pulls/{id}/close", post(close_pr))
+        .route("/repos/{owner}/{repo}/pulls/{id}/reopen", post(reopen_pr))
+        .route("/repos/{owner}/{repo}/pulls/{id}/diff", get(get_pr_diff))
         .route(
             "/repos/{owner}/{repo}/pulls/{id}/mergeability",
             get(check_mergeability),

@@ -87,13 +87,7 @@ async fn create_repo(
     State(state): State<AppState>,
     Json(input): Json<CreateRepoInput>,
 ) -> Result<(StatusCode, Json<RepoResponse>), ApiError> {
-    let repo = service::create_repo(
-        &state.db,
-        &state.git_storage_root,
-        user.id,
-        input,
-    )
-    .await?;
+    let repo = service::create_repo(&state.db, &state.git_storage_root, user.id, input).await?;
 
     Ok((StatusCode::CREATED, Json(RepoResponse::from(repo))))
 }
@@ -111,13 +105,7 @@ async fn get_repo(
 
     // Check read permission.
     let viewer_id = user.as_ref().map(|u| u.id);
-    permissions_service::check_repo_access(
-        &state.db,
-        viewer_id,
-        repo.id,
-        Permission::Read,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, viewer_id, repo.id, Permission::Read).await?;
 
     Ok(Json(RepoResponse::from(repo)))
 }
@@ -132,13 +120,8 @@ async fn update_repo(
     let (_owner_id, repo) = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Check admin permission (only owner can update metadata).
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Admin,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Admin)
+        .await?;
 
     let updated = service::update_repo(&state.db, repo.id, input).await?;
 
@@ -154,12 +137,8 @@ async fn list_accessible_repos(
     State(state): State<AppState>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Json<Vec<RepoResponse>>, ApiError> {
-    let repos = service::list_accessible_repos(
-        &state.db,
-        user.id,
-        pagination.into_pagination(),
-    )
-    .await?;
+    let repos =
+        service::list_accessible_repos(&state.db, user.id, pagination.into_pagination()).await?;
 
     let responses: Vec<RepoResponse> = repos.into_iter().map(RepoResponse::from).collect();
     Ok(Json(responses))
@@ -201,13 +180,8 @@ async fn archive_repo(
     let (_owner_id, repo) = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Check admin permission (only owner can archive).
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Admin,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Admin)
+        .await?;
 
     service::archive_repo(&state.db, repo.id, user.id).await?;
 
@@ -223,13 +197,8 @@ async fn delete_repo(
     let (_owner_id, repo) = resolve_repo(&state.db, &path.owner, &path.repo).await?;
 
     // Check admin permission (only owner can delete).
-    permissions_service::check_repo_access(
-        &state.db,
-        Some(user.id),
-        repo.id,
-        Permission::Admin,
-    )
-    .await?;
+    permissions_service::check_repo_access(&state.db, Some(user.id), repo.id, Permission::Admin)
+        .await?;
 
     service::delete_repo(&state.db, repo.id, user.id).await?;
 

@@ -74,13 +74,9 @@ async fn list_users(
     let limit = params.limit.unwrap_or(50).min(100).max(1);
     let offset = params.offset.unwrap_or(0).max(0);
 
-    let users = user_service::list_users_search(
-        &state.db,
-        limit,
-        offset,
-        params.username.as_deref(),
-    )
-    .await?;
+    let users =
+        user_service::list_users_search(&state.db, limit, offset, params.username.as_deref())
+            .await?;
 
     let response: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
     Ok(Json(response))
@@ -160,13 +156,8 @@ async fn list_repos(
     let limit = params.limit.unwrap_or(50).min(100).max(1);
     let offset = params.offset.unwrap_or(0).max(0);
 
-    let repos = repo_service::list_all_repos(
-        &state.db,
-        limit,
-        offset,
-        params.search.as_deref(),
-    )
-    .await?;
+    let repos =
+        repo_service::list_all_repos(&state.db, limit, offset, params.search.as_deref()).await?;
 
     let response: Vec<RepoResponse> = repos.into_iter().map(RepoResponse::from).collect();
     Ok(Json(response))
@@ -182,9 +173,7 @@ async fn get_repo(
         .await?
         .ok_or_else(|| ApiError::NotFound("repository not found".to_string()))?;
 
-    let storage_config = storage_service::StorageConfig::new(
-        state.git_storage_root.clone(),
-    );
+    let storage_config = storage_service::StorageConfig::new(state.git_storage_root.clone());
     let storage_exists = storage_service::repo_exists(&storage_config, id).await;
 
     Ok(Json(AdminRepoDetailResponse {
@@ -230,13 +219,7 @@ async fn list_jobs(
     let limit = params.limit.unwrap_or(50).min(100).max(1);
     let offset = params.offset.unwrap_or(0).max(0);
 
-    let jobs_list = jobs::list_jobs(
-        &state.db,
-        limit,
-        offset,
-        params.status.as_deref(),
-    )
-    .await?;
+    let jobs_list = jobs::list_jobs(&state.db, limit, offset, params.status.as_deref()).await?;
 
     Ok(Json(jobs_list))
 }
@@ -373,8 +356,8 @@ mod tests {
 
     #[test]
     fn admin_repo_detail_response_serializes() {
-        use chrono::Utc;
         use crate::repos::models::Visibility;
+        use chrono::Utc;
 
         let response = AdminRepoDetailResponse {
             repo: RepoResponse {
