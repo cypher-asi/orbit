@@ -94,7 +94,21 @@ impl IntoResponse for ApiError {
             }
         });
 
-        (status, axum::Json(body)).into_response()
+        // For 401 responses, include WWW-Authenticate header so git clients
+        // know to retry with Basic auth credentials.
+        if matches!(self, ApiError::Unauthorized(_)) {
+            (
+                status,
+                [(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    "Basic realm=\"orbit\"",
+                )],
+                axum::Json(body),
+            )
+                .into_response()
+        } else {
+            (status, axum::Json(body)).into_response()
+        }
     }
 }
 
