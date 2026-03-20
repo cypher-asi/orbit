@@ -436,6 +436,22 @@ pub async fn receive_pack(
         });
     }
 
+    // Create push post in aura-network feed (fire-and-forget).
+    if let Some(actor_id) = viewer_id {
+        let config = state.config.clone();
+        let disk_path = disk_path.clone();
+        let repo_id = repo.id;
+        let org_id = repo.org_id;
+        let project_id = repo.project_id;
+        let repo_name = repo.name.clone();
+        tokio::spawn(async move {
+            crate::feed_post::create_push_post(
+                &config, &disk_path, repo_id, org_id, project_id, actor_id, &repo_name,
+            )
+            .await;
+        });
+    }
+
     Ok((
         StatusCode::OK,
         [(

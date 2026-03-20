@@ -14,6 +14,7 @@ mod config;
 mod db;
 mod errors;
 mod events;
+mod feed_post;
 mod git_http;
 mod github_mirror;
 mod internal;
