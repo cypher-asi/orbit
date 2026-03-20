@@ -41,7 +41,7 @@ pub async fn create_push_post(config: &Config, params: &PushPostParams) {
 
     // Get recent commits from this push via git log on the bare repo
     let git = GitCommand::new(repo_disk_path.to_path_buf());
-    let commit_shas = match git.run(&["log", "--format=%H", "-n", "10", "HEAD"]).await {
+    let commit_shas = match git.run(&["log", "--format=%H", "-n", "10", "--all"]).await {
         Ok(output) if output.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let shas: Vec<String> = stdout
