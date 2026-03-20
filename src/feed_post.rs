@@ -3,26 +3,34 @@
 //! After a successful receive-pack, orbit calls aura-network's POST /internal/activity
 //! to create a feed post of type "push" with commit references.
 
-use std::path::Path;
-
 use uuid::Uuid;
 
 use crate::config::Config;
 use crate::storage::git::GitCommand;
 
+/// Parameters for creating a push post in the feed.
+pub struct PushPostParams {
+    pub repo_disk_path: std::path::PathBuf,
+    pub repo_id: Uuid,
+    pub org_id: Uuid,
+    pub project_id: Uuid,
+    pub actor_id: Uuid,
+    pub agent_id: Option<Uuid>,
+    pub repo_name: String,
+}
+
 /// Create a push post in aura-network's feed after a successful push.
 ///
 /// This is called fire-and-forget after receive-pack completes.
 /// Errors are logged but do not affect the push response.
-pub async fn create_push_post(
-    config: &Config,
-    repo_disk_path: &Path,
-    repo_id: Uuid,
-    org_id: Uuid,
-    project_id: Uuid,
-    actor_id: Uuid,
-    repo_name: &str,
-) {
+pub async fn create_push_post(config: &Config, params: &PushPostParams) {
+    let repo_disk_path = &params.repo_disk_path;
+    let repo_id = params.repo_id;
+    let org_id = params.org_id;
+    let project_id = params.project_id;
+    let actor_id = params.actor_id;
+    let agent_id = params.agent_id;
+    let repo_name = &params.repo_name;
     let aura_network_url = match &config.aura_network_url {
         Some(url) => url,
         None => {
@@ -71,6 +79,7 @@ pub async fn create_push_post(
         "postType": "push",
         "title": title,
         "userId": actor_id,
+        "agentId": agent_id,
         "pushId": repo_id,
         "commitIds": commit_ids,
     });
