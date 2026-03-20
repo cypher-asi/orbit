@@ -454,12 +454,8 @@ pub async fn receive_pack(
             }
 
             // Mirror to GitHub if configured.
-            crate::github_mirror::mirror_if_configured(
-                &config,
-                mirror_org_id,
-                &mirror_disk_path,
-            )
-            .await;
+            crate::github_mirror::mirror_if_configured(&config, mirror_org_id, &mirror_disk_path)
+                .await;
 
             // Create push post in aura-network feed.
             if let Some(ref params) = feed_post_params {
