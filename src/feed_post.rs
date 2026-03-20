@@ -1,6 +1,6 @@
 //! Feed post: auto-create a push post in aura-network when a push lands on orbit.
 //!
-//! After a successful receive-pack, orbit calls aura-network's POST /internal/activity
+//! After a successful receive-pack, orbit calls aura-network's POST /internal/posts
 //! to create a feed post of type "push" with commit references.
 
 use uuid::Uuid;
@@ -69,7 +69,7 @@ pub async fn create_push_post(config: &Config, params: &PushPostParams) {
 
     // Post to aura-network feed
     let client = reqwest::Client::new();
-    let url = format!("{}/internal/activity", aura_network_url);
+    let url = format!("{}/internal/posts", aura_network_url);
 
     let body = serde_json::json!({
         "profileId": actor_id,
