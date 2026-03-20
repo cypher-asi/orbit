@@ -195,6 +195,12 @@ Clone URL: `https://x-token:JWT@host/{org_id}/{repo}.git`
 | POST | `/{org_id}/{repo}/git-upload-pack` | Clone/fetch | Optional for public |
 | POST | `/{org_id}/{repo}/git-receive-pack` | Push | JWT (write) |
 
+On successful push, orbit automatically:
+1. Creates a **push post** in the aura-network feed (`POST /internal/activity`) with commit SHAs, push ID, and project/org context
+2. Mirrors to GitHub if a GitHub integration is configured for the org
+
+To track which agent performed the push, pass the `X-Agent-Id` header with the agent's UUID. Both `agentId` and `userId` (from JWT) are recorded on the feed post as a pair.
+
 ---
 
 ## Request/Response Format
