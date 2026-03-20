@@ -412,12 +412,8 @@ pub async fn receive_pack(
     let stream = tokio_util::io::ReaderStream::new(stdout);
     let response_body = Body::from_stream(stream);
 
-    // Keep the child process alive until it exits naturally.
-    tokio::spawn(async move {
-        let _ = child.wait().await;
-    });
-
     // Emit audit event for the push (fire-and-forget).
+    // This doesn't read git data so it can fire immediately.
     if let Some(actor_id) = viewer_id {
         let repo_id = repo.id;
         let db = state.db.clone();
@@ -427,34 +423,48 @@ pub async fn receive_pack(
         });
     }
 
-    // Mirror to GitHub if configured (fire-and-forget).
+    // Wait for receive-pack to finish, then run post-push tasks.
+    // GitHub mirror and feed post both read refs from the bare repo,
+    // so they must run after receive-pack has written refs to disk.
     {
         let config = state.config.clone();
-        let org_id = repo.org_id;
-        let disk_path = disk_path.clone();
-        tokio::spawn(async move {
-            crate::github_mirror::mirror_if_configured(&config, org_id, &disk_path).await;
+        let mirror_org_id = repo.org_id;
+        let mirror_disk_path = disk_path.clone();
+        let feed_post_params = viewer_id.map(|actor_id| {
+            let agent_id = headers
+                .get("x-agent-id")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<uuid::Uuid>().ok());
+            crate::feed_post::PushPostParams {
+                repo_disk_path: disk_path.clone(),
+                repo_id: repo.id,
+                org_id: repo.org_id,
+                project_id: repo.project_id,
+                actor_id,
+                agent_id,
+                repo_name: repo.name.clone(),
+            }
         });
-    }
-
-    // Create push post in aura-network feed (fire-and-forget).
-    if let Some(actor_id) = viewer_id {
-        let config = state.config.clone();
-        let agent_id = headers
-            .get("x-agent-id")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<uuid::Uuid>().ok());
-        let params = crate::feed_post::PushPostParams {
-            repo_disk_path: disk_path.clone(),
-            repo_id: repo.id,
-            org_id: repo.org_id,
-            project_id: repo.project_id,
-            actor_id,
-            agent_id,
-            repo_name: repo.name.clone(),
-        };
         tokio::spawn(async move {
-            crate::feed_post::create_push_post(&config, &params).await;
+            // Wait for receive-pack to finish writing refs to disk.
+            let status = child.wait().await;
+            if !matches!(status, Ok(ref s) if s.success()) {
+                tracing::warn!("receive-pack exited with error, skipping post-push tasks");
+                return;
+            }
+
+            // Mirror to GitHub if configured.
+            crate::github_mirror::mirror_if_configured(
+                &config,
+                mirror_org_id,
+                &mirror_disk_path,
+            )
+            .await;
+
+            // Create push post in aura-network feed.
+            if let Some(ref params) = feed_post_params {
+                crate::feed_post::create_push_post(&config, params).await;
+            }
         });
     }
 
