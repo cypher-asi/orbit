@@ -134,9 +134,10 @@ pub async fn mirror_if_configured(config: &Config, org_id: Uuid, repo_disk_path:
         }
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
+            let sanitized = stderr.replace(token, "***");
             tracing::error!(
                 org_id = %org_id,
-                stderr = %stderr,
+                stderr = %sanitized,
                 "GitHub mirror push failed"
             );
         }
