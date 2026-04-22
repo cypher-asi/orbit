@@ -443,6 +443,7 @@ pub async fn receive_pack(
                 actor_id,
                 agent_id,
                 repo_name: repo.name.clone(),
+                branch: repo.default_branch.clone(),
             }
         });
         tokio::spawn(async move {
